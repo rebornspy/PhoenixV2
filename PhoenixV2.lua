@@ -183,28 +183,15 @@ function Window.new(title: string): WindowType
 	body.Name = "Body"
 	body.Size = UDim2.new(1, 0, 1, -44)
 	body.AutomaticSize = Enum.AutomaticSize.None
-	body.ScrollingDirection = Enum.ScrollingDirection.XY
+	body.ScrollingDirection = Enum.ScrollingDirection.Y
 	body.Position = UDim2.fromOffset(0, 44)
 	body.BackgroundTransparency = 1
 	body.BorderSizePixel = 0
 	body.ScrollBarThickness = 10
 	body.ScrollBarImageColor3 = GetTheme().faint
-	body.CanvasSize = UDim2.new(0, 0, 0, 0)
-	body.AutomaticCanvasSize = Enum.AutomaticSize.XY
+	body.CanvasSize = UDim2.fromScale(0, 0)
+	body.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	body.Parent = main
-
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 12)
-	pad.PaddingBottom = UDim.new(0, 12)
-	pad.PaddingLeft = UDim.new(0, 12)
-	pad.PaddingRight = UDim.new(0, 12)
-	pad.Parent = body
-
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 12)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.Parent = body
 	
 	local handle = Instance.new("Frame")
 	handle.Name = "ResizeHandle"
@@ -225,6 +212,8 @@ function Window.new(title: string): WindowType
 	self.Gui = gui
 	self.Main = main
 	self.Body = body
+	
+	self:_updateColumnSize()
 
 	return self
 end
@@ -272,33 +261,56 @@ function Window:_updateColumnSize()
 	if count == 0 then return end
 
 	local bodyWidth: number = self.Body.AbsoluteSize.X
-	local bodyHeight: number = self.Body.AbsoluteSize.Y
-	local padding = 12
+	local padding = 8
 	local minColWidth = 175
 
-	local totalPadding = padding * (count + 1)
-	local fullWidthCol = (bodyWidth - totalPadding) / count
-	
-	local function tweenColumnSize(col, newWidth, newHeight)
-		Util.tween(col, {
-			Size = UDim2.fromOffset(newWidth, newHeight)
-		}, 0.15)
+	local maxCols = math.max(1, math.floor((bodyWidth - padding) / (minColWidth + padding)))
+	local colsPerRow = math.clamp(maxCols, 1, count)
+	local colWidth = (bodyWidth - padding * (colsPerRow + 1)) / colsPerRow
+
+	for _, col: any in ipairs(columns) do
+		col.Size = UDim2.new(0, colWidth, col.Size.Y.Scale, col.Size.Y.Offset)
 	end
-	
-	local colHeight = math.max(bodyHeight - padding * 2)
 
-	if fullWidthCol >= minColWidth then
-		for _, col: any in ipairs(columns) do
-			tweenColumnSize(col, fullWidthCol, colHeight)
-		end
-	else
-		local colsPerRow = math.max(1, math.floor(bodyWidth / (minColWidth + padding)))
-		local rowPadding = padding * (colsPerRow + 1)
-		local wrappedWidth = (bodyWidth - rowPadding) / colsPerRow
+	task.wait()
 
-		for _, col in ipairs(columns) do
-			tweenColumnSize(col, wrappedWidth, colHeight)
+	local function getColumnContentHeight(col: Frame)
+		local layout = col:FindFirstChildOfClass("UIListLayout")
+		if layout then
+			return layout.AbsoluteContentSize.Y + 20
 		end
+
+		local h = 0
+		for _, c in ipairs(col:GetChildren()) do
+			if c:IsA("GuiObject") then
+				h += c.AbsoluteSize.Y
+			end
+		end
+		return h + 20
+	end
+
+	local colHeights = {}
+	for _, col in ipairs(columns) do
+		colHeights[col] = getColumnContentHeight(col)
+	end
+
+	local colY = table.create(colsPerRow, padding)
+
+	for i, col in ipairs(columns) do
+		local slot = ((i - 1) % colsPerRow) + 1
+		local x = padding + (slot - 1) * (colWidth + padding)
+		local h = colHeights[col]
+		local y = colY[slot]
+
+		Util.tween(col, {
+			Size = UDim2.new(0, colWidth, 0, h)
+		}, 0.15)
+
+		Util.tween(col, {
+			Position = UDim2.new(0, x, 0, y)
+		}, 0.15)
+
+		colY[slot] += h + padding
 	end
 end
 
@@ -328,7 +340,7 @@ function Column.new(parent: Instance, order: number)
 
 	local col = Instance.new("Frame")
 	col.Size = UDim2.fromOffset(208, 0)
-	col.AutomaticSize = Enum.AutomaticSize.Y
+	col.AutomaticSize = Enum.AutomaticSize.None
 	col.BackgroundColor3 = GetTheme().colbg
 	col.BorderSizePixel = 0
 	col.LayoutOrder = order
@@ -840,7 +852,7 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
--- \\ Exporting
+-- \\ Module Export
 local RebornUI = {
 	Window = Window,
 	Column = Column,
