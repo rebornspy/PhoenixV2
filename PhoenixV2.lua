@@ -1,5 +1,9 @@
 --!strict
 
+-- Created and Maintained by reborb (@rebornspy).
+-- Inspired by various other GUI Suites.
+-- Works in studio, at the cost of no icons.
+
 -- \\ Globals & Services
 local Players:  Players = game:GetService("Players")                    :: Players
 local UIS:      UserInputService = game:GetService("UserInputService")  :: UserInputService
@@ -379,6 +383,7 @@ function Column.new(parent: Instance, order: number, window: WindowType): Column
 	local self = setmetatable({}, Column) :: ColumnType
 
 	local col = Instance.new("Frame")
+	col.Name = "Column" .. tostring(order)
 	col.Size = UDim2.fromOffset(208, 0)
 	col.AutomaticSize = Enum.AutomaticSize.None
 	col.ClipsDescendants = true
@@ -399,12 +404,38 @@ function Column.new(parent: Instance, order: number, window: WindowType): Column
 
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 3)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = col
 
 	self.Frame = col
 	self.Window = window
 
 	return self
+end
+
+function Column:ReorderChildren(sortFunc)
+	local frame = self.Frame
+	local children = {}
+
+	for _, child: any in ipairs(frame:GetChildren()) do
+		if #child:GetChildren() ~= 2 then
+			if child:IsA("Frame") then
+				table.insert(children, child)
+			end
+		end
+	end
+
+	table.sort(children, sortFunc or function(a: any, b)
+		return a.Name < b.Name
+	end)
+
+	for i, child: any in ipairs(children) do
+		child.LayoutOrder = i
+	end
+
+	task.defer(function()
+		self.Window:_updateColumnSize()
+	end)
 end
 
 function Window:addColumn(order: number)
@@ -417,10 +448,25 @@ end
 export type SectionType = {
 	Frame: Frame,
 }
-function Section.new(parent: Instance, name: string, iconName: string?, first: boolean?): SectionType
+
+export type SectionData = {
+	Name: string,
+	Icon: string?,
+	First: boolean?,
+	LayoutOrder: number?,
+}
+
+function Section.new(parent: Instance, data: SectionData): SectionType
+	local name = data.Name or "Section"
+	local iconName = data.Icon or ""
+	local first = data.First or false
+	local layoutOrder = (first and 0 or data.LayoutOrder) or 0
+	
 	local self = setmetatable({}, Section) :: SectionType
 
 	local frame = Instance.new("Frame")
+	frame.LayoutOrder = layoutOrder
+	frame.Name = name or "Section"
 	frame.Size = UDim2.new(1, 0, 0, first and 20 or 28)
 	frame.BackgroundTransparency = 1
 	frame.Parent = parent
@@ -432,6 +478,7 @@ function Section.new(parent: Instance, name: string, iconName: string?, first: b
 	end
 
 	local label = Instance.new("TextLabel")
+	label.Name = "SectionTitle"
 	label.Size = UDim2.new(1, -xo, 0, 14)
 	label.Position = UDim2.new(0, xo, 1, -14)
 	label.BackgroundTransparency = 1
@@ -446,17 +493,8 @@ function Section.new(parent: Instance, name: string, iconName: string?, first: b
 	return self
 end
 
-export type SectionData = {
-	Name: string,
-	Icon: string?,
-	First: boolean?,
-}
-
 function Column:addSection(data: SectionData)
-	local name = data.Name or "Section"
-	local icon = data.Icon or ""
-	local first = data.First or true
-	return Section.new(self.Frame, name, icon, first)
+	return Section.new(self.Frame, data)
 end
 
 -- \\ Toggles
@@ -477,11 +515,13 @@ export type ToggleData = {
 	Default: boolean,
 	Callback: (boolean) -> (),
 	Style: string?,
+	LayoutOrder: number?,
 }
 
 function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): ToggleType
 	local name: string = data.Name or "Toggle"
 	local default: boolean = data.Default or false
+	local layoutOrder: number = data.LayoutOrder or 1
 	local cb: (boolean) -> () = data.Callback or function() end
 
 	local self = setmetatable({}, Toggle) :: ToggleType
@@ -489,6 +529,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 
 	local f = Instance.new("Frame")
 	f.Name = name
+	f.LayoutOrder = layoutOrder
 	f.Size = UDim2.new(1, 0, 0, 34)
 	f.BackgroundColor3 = GetTheme().colbg
 	f.BackgroundTransparency = 0
@@ -505,7 +546,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 
 	local arrow = Instance.new("ImageButton")
 	arrow.Size = UDim2.fromOffset(16, 16)
-	arrow.Name = "Arrow"
+	arrow.Name = "DropdownArrow"
 	arrow.Position = UDim2.new(1, -40, 0, 8)
 	arrow.AnchorPoint = Vector2.new(1, 0)
 	arrow.BackgroundTransparency = 1
@@ -579,6 +620,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	end
 
 	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Text"
 	lbl.Size = UDim2.new(1, -54, 0, 0)
 	lbl.Position = UDim2.fromOffset(10, 17)
 	lbl.BackgroundTransparency = 1
@@ -590,6 +632,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	lbl.Parent = f
 
 	local sw = Instance.new("TextButton")
+	sw.Name = "Switch"
 	sw.Size = UDim2.fromOffset(34, 18)
 	sw.Position = UDim2.new(1, -42, 0, 7)
 	sw.BackgroundColor3 = default and GetTheme().blue or GetTheme().trackOff
@@ -599,6 +642,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	Util.corner(sw, 9)
 
 	local knob = Instance.new("Frame")
+	knob.Name = "Knob"
 	knob.Size = UDim2.fromOffset(14, 14)
 	knob.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
 	knob.BackgroundColor3 = GetTheme().knob
@@ -668,6 +712,7 @@ export type SliderData = {
 	Max: number,
 	Step: number,
 	Default: number,
+	LayoutOrder: number?,
 	Callback: (number) -> (),
 	Style: string?,
 }
@@ -689,6 +734,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	local max: number = data.Max or 100
 	local snap: number = data.Step or 1
 	local default: number = data.Default or min
+	local layoutOrder: number = data.LayoutOrder or 1
 	local cb: (number) -> () = data.Callback or function() end
 
 	local self = setmetatable({}, Slider) :: SliderType
@@ -696,6 +742,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 
 	local f = Instance.new("Frame")
 	f.Name = name
+	f.LayoutOrder = layoutOrder
 	f.Size = UDim2.new(1, 0, 0, 46)
 	f.BackgroundColor3 = GetTheme().colbg
 	f.BackgroundTransparency = 0
@@ -711,7 +758,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	end)
 
 	local arrow = Instance.new("ImageButton")
-	arrow.Name = "Arrow"
+	arrow.Name = "DropdownArrow"
 	arrow.Size = UDim2.fromOffset(16, 16)
 	arrow.Position = UDim2.new(1, -20, 0, 8)
 	arrow.AnchorPoint = Vector2.new(1, 0)
@@ -780,6 +827,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	end
 
 	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Text"
 	lbl.Size = UDim2.new(1, -20, 0, 18)
 	lbl.Position = UDim2.fromOffset(10, 7)
 	lbl.BackgroundTransparency = 1
@@ -791,6 +839,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	lbl.Parent = f
 
 	local val = Instance.new("TextLabel")
+	val.Name = "Value"
 	val.Size = UDim2.fromOffset(50, 18)
 	val.Position = UDim2.new(1, -58, 0, 7)
 	val.BackgroundTransparency = 1
@@ -802,6 +851,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	val.Parent = f
 
 	local bar = Instance.new("Frame")
+	bar.Name = "Bar"
 	bar.Size = UDim2.new(1, -20, 0, 4)
 	bar.Position = UDim2.fromOffset(10, 30)
 	bar.BackgroundColor3 = GetTheme().trackOff
@@ -812,6 +862,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	local rel = (default - min) / (max - min)
 
 	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
 	fill.Size = UDim2.new(rel, 0, 1, 0)
 	fill.BackgroundColor3 = GetTheme().blue
 	fill.BorderSizePixel = 0
@@ -819,6 +870,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	Util.corner(fill, 2)
 
 	local knob = Instance.new("Frame")
+	knob.Name = "Knob"
 	knob.Size = UDim2.fromOffset(12, 12)
 	knob.AnchorPoint = Vector2.new(0.5, 0.5)
 	knob.Position = UDim2.new(rel, 0, 0.5, 0)
@@ -917,8 +969,8 @@ end
 export type PillData = {
 	Name: string,
 	Icon: string?,
+	LayoutOrder: number?,
 	Callback: () -> (),
-	Style: string?,
 }
 
 export type PillType = {
@@ -929,12 +981,15 @@ export type PillType = {
 function Pill.new(window: WindowType, parent: Instance, data: PillData): PillType
 	local name: string = data.Name or "Pill"
 	local iconName: string? = data.Icon or ""
+	local layoutOrder: number = data.LayoutOrder or 1
 	local cb: () -> () = data.Callback or function() end
 
 	local self = setmetatable({}, Pill) :: PillType
 	self.Window = window
 
 	local b = Instance.new("TextButton")
+	b.Name = name or "Button"
+	b.LayoutOrder = layoutOrder or 1
 	b.Size = UDim2.new(1, 0, 0, 32)
 	b.BackgroundColor3 = GetTheme().pill
 	b.Text = ""
@@ -995,11 +1050,13 @@ export type MiniButtonConfig = {
 	Callback: (Player) -> (),
 }
 
-function PlayerList.new(window: WindowType, parent: Instance, table: {}): PlayerListType
+function PlayerList.new(window: WindowType, parent: Instance, table: {}?): PlayerListType
 	local self = setmetatable({}, PlayerList) :: PlayerListType
 	self.Window = window
 
 	local wrap = Instance.new("Frame")
+	wrap.LayoutOrder = 0
+	wrap.Name = "PlayerListHolder"
 	wrap.Size = UDim2.new(1, 0, 0, 190)
 	wrap.BackgroundColor3 = GetTheme().bg
 	wrap.BackgroundTransparency = 0.4
@@ -1008,6 +1065,7 @@ function PlayerList.new(window: WindowType, parent: Instance, table: {}): Player
 	Util.corner(wrap, 6)
 
 	local list = Instance.new("ScrollingFrame")
+	list.Name = "PlayerList"
 	list.Size = UDim2.new(1, -4, 1, -4)
 	list.Position = UDim2.fromOffset(2, 2)
 	list.BackgroundTransparency = 1
@@ -1056,6 +1114,7 @@ function PlayerList:_refresh()
 	for _, plr: Player in ipairs(Players:GetPlayers()) do
 		if plr ~= LP then
 			local row: Frame = Instance.new("Frame") :: Frame
+			row.Name = plr.Name .. " PlayerListFrame"
 			row.Size = UDim2.new(1, 0, 0, 26)
 			row.BackgroundColor3 = GetTheme().hover
 			row.BackgroundTransparency = 1
@@ -1093,6 +1152,7 @@ end
 -- \\ Player List Mini Buttons
 function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 	local b = Instance.new("TextButton")
+	b.Name = cfg.Text or "PlayerListMiniButton"
 	b.Size = UDim2.fromOffset(30, 22)
 	b.Position = UDim2.new(1, cfg.XOffset, 0.5, -11)
 	b.BackgroundColor3 = GetTheme().pill
@@ -1134,7 +1194,7 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
--- // Options (standalone, not factory-based)
+-- // Options
 function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	local self = setmetatable({}, Option)
 
@@ -1142,6 +1202,7 @@ function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	cb = cb or function() end
 
 	local f = Instance.new("Frame")
+	f.Name = name or "Option"
 	f.Size = UDim2.new(1, 0, 0, 28)
 	f.BackgroundColor3 = GetTheme().hover
 	f.BackgroundTransparency = 1
