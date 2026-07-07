@@ -1,36 +1,37 @@
 --!strict
 
 -- \\ Globals & Services
-local Players:	Players = game:GetService("Players")					:: Players
-local UIS:		UserInputService = game:GetService("UserInputService")	:: UserInputService
-local ts: 		TweenService = game:GetService("TweenService")			:: TweenService
+local Players:  Players = game:GetService("Players")                    :: Players
+local UIS:      UserInputService = game:GetService("UserInputService")  :: UserInputService
+local ts:       TweenService = game:GetService("TweenService")          :: TweenService
 
-local LP:		Player = Players.LocalPlayer	::	Player
+local LP:       Player = Players.LocalPlayer    ::  Player
 
 -- // Themes
-local Themes	=	{
-	Dark		=	{
-		bg			=	Color3.fromRGB(17,	17,	20	);
-		header		=	Color3.fromRGB(23,	23,	27	);
-		colbg		=	Color3.fromRGB(24,	24,	29	);
-		border		=	Color3.fromRGB(44,	44,	51	);
-		hover		=	Color3.fromRGB(34,	34,	40	);
-		text		=	Color3.fromRGB(233,	233, 238);
-		dim			=	Color3.fromRGB(150, 150, 160);
-		faint		=	Color3.fromRGB(105, 105, 116);
-		blue		=	Color3.fromRGB(72,	130, 248);
-		red			=	Color3.fromRGB(220,	80,	90	);
-		trackOff	=	Color3.fromRGB(58,	58,	66	);
-		pill		=	Color3.fromRGB(33,	33,	40	);
-		pillBrd		=	Color3.fromRGB(54,	54,	62	);
-		knob		=	Color3.fromRGB(240,	240, 245);
+local Themes    =   {
+	Dark        =   {
+		bg          =   Color3.fromRGB(17,  17, 20  );
+		header      =   Color3.fromRGB(23,  23, 27  );
+		colbg       =   Color3.fromRGB(24,  24, 29  );
+		border      =   Color3.fromRGB(44,  44, 51  );
+		hover       =   Color3.fromRGB(34,  34, 40  );
+		pillHover   =   Color3.fromRGB(44,  44, 50  );
+		text        =   Color3.fromRGB(233, 233, 238);
+		dim         =   Color3.fromRGB(150, 150, 160);
+		faint       =   Color3.fromRGB(105, 105, 116);
+		blue        =   Color3.fromRGB(72,  130, 248);
+		red         =   Color3.fromRGB(220, 80, 90  );
+		trackOff    =   Color3.fromRGB(58,  58, 66  );
+		pill        =   Color3.fromRGB(33,  33, 40  );
+		pillBrd     =   Color3.fromRGB(54,  54, 62  );
+		knob        =   Color3.fromRGB(240, 240, 245);
 	};
 }
 
 local CurrentTheme = Themes.Dark
 
 local function SetTheme(name: string)
-	local t	= Themes[name]
+	local t = Themes[name]
 	if t then
 		CurrentTheme = t
 		return true
@@ -49,6 +50,7 @@ function Util.corner(p: Instance, r: number?)
 	local u = Instance.new("UICorner")
 	u.CornerRadius = UDim.new(0, r or 6)
 	u.Parent = p
+	return u
 end
 
 function Util.stroke(p: Instance, col: Color3, t: number?)
@@ -64,7 +66,7 @@ function Util.tween(obj: Instance, props: {[string]: any}, time: number?)
 		obj,
 		TweenInfo.new(time or 0.12),
 		props
-	)	:Play()
+	)   :Play()
 end
 
 -- // Icons
@@ -90,23 +92,54 @@ local function Icon(parent: Instance, name: string, size: number, color: Color3)
 	return img
 end
 
--- \\ Windows
+-- \\ Classes
 local Window = {}
 Window.__index = Window
 
+local Column = {}
+Column.__index = Column
+
+local Section = {}
+Section.__index = Section
+
+local Toggle = {}
+Toggle.__index = Toggle
+
+local Slider = {}
+Slider.__index = Slider
+
+local Pill = {}
+Pill.__index = Pill
+local PlayerList = {}
+PlayerList.__index = PlayerList
+
+local MiniButton = {}
+MiniButton.__index = MiniButton
+
+local Option = {}
+Option.__index = Option
+
+local ComponentFactory = {
+	Toggle = Toggle,
+	Slider = Slider,
+	Button = Pill,
+}
+
+-- // Windows
 export type WindowType = {
 	Gui: ScreenGui,
 	Main: Frame,
 	Body: ScrollingFrame,
-	
+
 	_makeResizable: (self: WindowType, handle: Frame) -> (),
 	_updateColumnSize: (self: WindowType) -> (),
-	RefreshTheme: (self: WindowType) -> ()
+	RefreshTheme: (self: WindowType) -> (),
+	addColumn: (self: WindowType, order: number) -> ColumnType,
 }
 
 function Window.new(title: string): WindowType
 	local self = setmetatable({}, Window) :: WindowType
-	
+
 	local function makeDraggable(topbar: Frame)
 		local dragging = false
 		local dragStart: Vector3
@@ -156,7 +189,7 @@ function Window.new(title: string): WindowType
 
 	Util.corner(main, 12)
 	Util.stroke(main, GetTheme().border, 0)
-	
+
 	local header = Instance.new("Frame")
 	header.Name = "Topbar"
 	header.Size = UDim2.new(1, 0, 0, 44)
@@ -176,7 +209,7 @@ function Window.new(title: string): WindowType
 	label.TextSize = 14
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = header
-	
+
 	makeDraggable(header)
 
 	local body = Instance.new("ScrollingFrame")
@@ -192,7 +225,7 @@ function Window.new(title: string): WindowType
 	body.CanvasSize = UDim2.fromScale(0, 0)
 	body.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	body.Parent = main
-	
+
 	local handle = Instance.new("Frame")
 	handle.Name = "ResizeHandle"
 	handle.Size = UDim2.fromOffset(16, 16)
@@ -203,16 +236,16 @@ function Window.new(title: string): WindowType
 	handle.Parent = main
 	Util.corner(handle, 4)
 
+	self.Gui = gui
+	self.Main = main
+	self.Body = body
+
 	self:_makeResizable(handle)
-	
+
 	main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		self:_updateColumnSize()
 	end)
 
-	self.Gui = gui
-	self.Main = main
-	self.Body = body
-	
 	self:_updateColumnSize()
 
 	return self
@@ -331,16 +364,24 @@ function Window:RefreshTheme()
 	end
 end
 
--- // Columns
-local Column = {}
-Column.__index = Column
+-- \\ Columns
+export type ColumnType = {
+	Frame: Frame,
+	Window: WindowType,
 
-function Column.new(parent: Instance, order: number)
-	local self = setmetatable({}, Column)
+	addSection: (self: ColumnType, data: SectionData) -> SectionType,
+	addToggle: (self: ColumnType, data: ToggleData) -> ToggleType,
+	addSlider: (self: ColumnType, data: SliderData) -> SliderType,
+	addPill: (self: ColumnType, data: PillData) -> PillType,
+	addPlayerList: (self: ColumnType) -> PlayerListType,
+}
+function Column.new(parent: Instance, order: number, window: WindowType): ColumnType
+	local self = setmetatable({}, Column) :: ColumnType
 
 	local col = Instance.new("Frame")
 	col.Size = UDim2.fromOffset(208, 0)
 	col.AutomaticSize = Enum.AutomaticSize.None
+	col.ClipsDescendants = true
 	col.BackgroundColor3 = GetTheme().colbg
 	col.BorderSizePixel = 0
 	col.LayoutOrder = order
@@ -361,21 +402,23 @@ function Column.new(parent: Instance, order: number)
 	layout.Parent = col
 
 	self.Frame = col
+	self.Window = window
+
 	return self
 end
 
 function Window:addColumn(order: number)
-	local col = Column.new(self.Body, order)
+	local col = Column.new(self.Body, order, self)
 	self:_updateColumnSize()
 	return col
 end
 
--- \\ Sections
-local Section = {}
-Section.__index = Section
-
-function Section.new(parent: Instance, name: string, iconName: string?, first: boolean?)
-	local self = setmetatable({}, Section)
+-- // Sections
+export type SectionType = {
+	Frame: Frame,
+}
+function Section.new(parent: Instance, name: string, iconName: string?, first: boolean?): SectionType
+	local self = setmetatable({}, Section) :: SectionType
 
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.new(1, 0, 0, first and 20 or 28)
@@ -406,7 +449,7 @@ end
 export type SectionData = {
 	Name: string,
 	Icon: string?,
-	First: boolean?
+	First: boolean?,
 }
 
 function Column:addSection(data: SectionData)
@@ -416,31 +459,132 @@ function Column:addSection(data: SectionData)
 	return Section.new(self.Frame, name, icon, first)
 end
 
--- // Toggles
-local Toggle = {}
-Toggle.__index = Toggle
+-- \\ Toggles
+export type ToggleType = {
+	Arrow: ImageButton,
+	Window: WindowType,
+	Dropdown: Frame,
+	DropdownOpen: boolean,
+	Frame: Frame,
 
-function Toggle.new(parent: Instance, name: string, default: boolean, cb)
-	local self = setmetatable({}, Toggle)
+	_updateArrowVisibility: () -> (),
+	AddOption: (self: ToggleType, data: ToggleData) -> (),
+	AddComponent: (self: ToggleType, data: ToggleData) -> (),
+}
+
+export type ToggleData = {
+	Name: string,
+	Default: boolean,
+	Callback: (boolean) -> (),
+	Style: string?,
+}
+
+function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): ToggleType
+	local name: string = data.Name or "Toggle"
+	local default: boolean = data.Default or false
+	local cb: (boolean) -> () = data.Callback or function() end
+
+	local self = setmetatable({}, Toggle) :: ToggleType
+	self.Window = window
 
 	local f = Instance.new("Frame")
+	f.Name = name
 	f.Size = UDim2.new(1, 0, 0, 34)
-	f.BackgroundColor3 = GetTheme().hover
-	f.BackgroundTransparency = 1
+	f.BackgroundColor3 = GetTheme().colbg
+	f.BackgroundTransparency = 0
 	f.Parent = parent
 	Util.corner(f, 6)
 
 	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 0})
+		if f.Parent and f.Parent.Name == "Dropdown" then
+			Util.tween(f, {BackgroundColor3 = GetTheme().bg})
+		else
+			Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+		end
 	end)
 
 	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 1})
+		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
 	end)
 
+	local arrow = Instance.new("ImageButton")
+	arrow.Size = UDim2.fromOffset(16, 16)
+	arrow.Name = "Arrow"
+	arrow.Position = UDim2.new(1, -40, 0, 8)
+	arrow.AnchorPoint = Vector2.new(1, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Image = "rbxassetid://6031094670"
+	arrow.Rotation = 0
+	arrow.Parent = f
+
+	self.Arrow = arrow
+
+	local drop = Instance.new("Frame")
+	drop.BackgroundTransparency = 0
+	drop.Name = "Dropdown"
+	drop.BorderSizePixel = 0
+	drop.BackgroundColor3 = GetTheme().bg
+	drop.ZIndex = 1
+	drop.Position = UDim2.new(0, 4, 0, 34)
+	drop.Size = UDim2.new(1, -8, 0, 0)
+	drop.ClipsDescendants = true
+	drop.Parent = f
+
+	local list = Instance.new("UIListLayout")
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, 2)
+	list.Parent = drop
+
+	local dropPadding = Instance.new("UIPadding")
+	dropPadding.PaddingTop = UDim.new(0, 2)
+	dropPadding.PaddingBottom = UDim.new(0, 2)
+	dropPadding.PaddingLeft = UDim.new(0, 2)
+	dropPadding.PaddingRight = UDim.new(0, 2)
+	dropPadding.Parent = drop
+	Util.corner(drop, 8)
+
+	self.Dropdown = drop
+	self.DropdownOpen = false
+
+	self.Arrow.MouseButton1Click:Connect(function()
+		self.DropdownOpen = not self.DropdownOpen
+		self.Dropdown.Visible = self.DropdownOpen
+
+		Util.tween(self.Arrow, {
+			Rotation = self.DropdownOpen and -90 or 0
+		}, 0.15)
+
+		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
+
+		Util.tween(self.Dropdown, {
+			Size = UDim2.new(1, -8, 0, targetHeight + 4)
+		}, 0.15)
+
+		local baseHeight = 34
+		if self.DropdownOpen then
+			Util.tween(self.Frame, {
+				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 8)
+			}, 0.15)
+		else
+			Util.tween(self.Frame, {
+				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
+			}, 0.15)
+		end
+
+		task.delay(0.1, function()
+			self.Window:_updateColumnSize()
+		end)
+	end)
+
+	function self:_updateArrowVisibility()
+		local hasChildren = #drop:GetChildren() > 3
+		self.Arrow.Visible = hasChildren
+	end
+
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -54, 1, 0)
-	lbl.Position = UDim2.fromOffset(10, 0)
+	lbl.Size = UDim2.new(1, -54, 0, 0)
+	lbl.Position = UDim2.fromOffset(10, 17)
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.GothamMedium
 	lbl.Text = name
@@ -451,7 +595,7 @@ function Toggle.new(parent: Instance, name: string, default: boolean, cb)
 
 	local sw = Instance.new("TextButton")
 	sw.Size = UDim2.fromOffset(34, 18)
-	sw.Position = UDim2.new(1, -42, 0.5, -9)
+	sw.Position = UDim2.new(1, -42, 0, 7)
 	sw.BackgroundColor3 = default and GetTheme().blue or GetTheme().trackOff
 	sw.Text = ""
 	sw.AutoButtonColor = false
@@ -481,44 +625,167 @@ function Toggle.new(parent: Instance, name: string, default: boolean, cb)
 		cb(state)
 	end)
 
+	self:_updateArrowVisibility()
 	self.Frame = f
 	return self
 end
 
-export type ToggleData = {
-	Name: string,
-	Default: boolean,
-	Callback: ( boolean ) -> ()
-}
+function Toggle:AddOption(data)
+	local style = data.Style
+	if not style then
+		warn("Toggle:AddOption missing Style")
+		return
+	end
 
-function Column:addToggle(data: ToggleData)
-	local name = data.Name or "Toggle"
-	local default = data.Default or false
-	local cb = data.Callback or function() end
-	return Toggle.new(self.Frame, name, default, cb)
+	local class: any = ComponentFactory[style]
+	if not class then
+		warn("Unknown component style:", style)
+		return
+	end
+
+	local newComponent: any = class.new(self.Window, self.Dropdown, data)
+	local dropdown = self.Dropdown :: Frame
+
+	if self.DropdownOpen then
+		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local newHeight = dropdownLayout.AbsoluteContentSize.Y
+		Util.tween(self.Dropdown, {
+			Size = UDim2.new(1, 0, 0, newHeight)
+		}, 0.15)
+	end
+
+	self:_updateArrowVisibility()
+
+	task.defer(function()
+		self.Window:_updateColumnSize()
+	end)
 end
 
--- \\ Sliders
-local Slider = {}
-Slider.__index = Slider
+function Column:addToggle(data: ToggleData)
+	return Toggle.new(self.Window, self.Frame, data)
+end
 
-function Slider.new(parent: Instance, name: string, min: number, max: number, snap: number, default: number, cb)
-	local self = setmetatable({}, Slider)
+-- // Sliders
+export type SliderData = {
+	Name: string,
+	Min: number,
+	Max: number,
+	Step: number,
+	Default: number,
+	Callback: (number) -> (),
+	Style: string?,
+}
+
+export type SliderType = {
+	Window: WindowType,
+	Frame: Frame,
+	Arrow: ImageButton,
+	Dropdown: Frame,
+	DropdownOpen: boolean,
+
+	_updateArrowVisibility: () -> (),
+	AddOption: (self: SliderType, data: SliderData) -> (),
+}
+
+function Slider.new(window: WindowType, parent: Instance, data: SliderData): SliderType
+	local name: string = data.Name or "Slider"
+	local min: number = data.Min or 0
+	local max: number = data.Max or 100
+	local snap: number = data.Step or 1
+	local default: number = data.Default or min
+	local cb: (number) -> () = data.Callback or function() end
+
+	local self = setmetatable({}, Slider) :: SliderType
+	self.Window = window
 
 	local f = Instance.new("Frame")
+	f.Name = name
 	f.Size = UDim2.new(1, 0, 0, 46)
-	f.BackgroundColor3 = GetTheme().hover
-	f.BackgroundTransparency = 1
+	f.BackgroundColor3 = GetTheme().colbg
+	f.BackgroundTransparency = 0
 	f.Parent = parent
 	Util.corner(f, 6)
 
 	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 0})
+		if f.Parent and f.Parent.Name == "Dropdown" then
+			Util.tween(f, {BackgroundColor3 = GetTheme().bg})
+		else
+			Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+		end
 	end)
 
 	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 1})
+		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
 	end)
+
+	local arrow = Instance.new("ImageButton")
+	arrow.Name = "Arrow"
+	arrow.Size = UDim2.fromOffset(16, 16)
+	arrow.Position = UDim2.new(1, -20, 0, 8)
+	arrow.AnchorPoint = Vector2.new(1, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Image = "rbxassetid://6031094670"
+	arrow.Rotation = 0
+	arrow.Parent = f
+
+	self.Arrow = arrow
+
+	local drop = Instance.new("Frame")
+	drop.BackgroundTransparency = 0
+	drop.Name = "Dropdown"
+	drop.BorderSizePixel = 0
+	drop.BackgroundColor3 = GetTheme().bg
+	drop.ZIndex = 1
+	drop.Position = UDim2.new(0, 4, 0, 34)
+	drop.Size = UDim2.new(1, -8, 0, 0)
+	drop.ClipsDescendants = true
+	drop.Parent = f
+
+	local list = Instance.new("UIListLayout")
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, 2)
+	list.Parent = drop
+
+	local dropPadding = Instance.new("UIPadding")
+	dropPadding.PaddingTop = UDim.new(0, 2)
+	dropPadding.PaddingBottom = UDim.new(0, 2)
+	dropPadding.PaddingLeft = UDim.new(0, 2)
+	dropPadding.PaddingRight = UDim.new(0, 2)
+	dropPadding.Parent = drop
+	Util.corner(drop, 8)
+
+	self.Dropdown = drop
+	self.DropdownOpen = false
+
+	self.Arrow.MouseButton1Click:Connect(function()
+		self.DropdownOpen = not self.DropdownOpen
+		self.Dropdown.Visible = self.DropdownOpen
+
+		Util.tween(self.Arrow, {
+			Rotation = self.DropdownOpen and -90 or 0
+		}, 0.15)
+
+		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
+
+		Util.tween(self.Dropdown, {
+			Size = UDim2.new(1, -8, 0, targetHeight + 4)
+		}, 0.15)
+
+		local baseHeight = 34
+		Util.tween(self.Frame, {
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 8)
+		}, 0.15)
+
+		task.delay(0.1, function()
+			self.Window:_updateColumnSize()
+		end)
+	end)
+
+	function self:_updateArrowVisibility()
+		local hasChildren = #drop:GetChildren() > 3
+		self.Arrow.Visible = hasChildren
+	end
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -20, 0, 18)
@@ -526,7 +793,7 @@ function Slider.new(parent: Instance, name: string, min: number, max: number, sn
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.GothamMedium
 	lbl.Text = name
-	lbl.TextColor3 = GetTheme().dim
+	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.Parent = f
@@ -611,35 +878,69 @@ function Slider.new(parent: Instance, name: string, min: number, max: number, sn
 		end
 	end)
 
+	self:_updateArrowVisibility()
+
 	self.Frame = f
 	return self
 end
 
-export type SliderData = {
-	Name: string,
-	Min: number,
-	Max: number,
-	Step: number,
-	Default: number,
-	Callback: ( number ) -> ()
-}
+function Slider:AddOption(data)
+	local style = data.Style
+	if not style then
+		warn("Toggle:AddComponent missing Style")
+		return
+	end
 
-function Column:addSlider(data: SliderData)
-	local name = data.Name or "Slider"
-	local min = data.Min or 0
-	local max = data.Max or 100
-	local snap = data.Step or 1
-	local default = data.Default or data.Min or 0
-	local cb = data.Callback or function() end
-	return Slider.new(self.Frame, name, min, max, snap, default, cb)
+	local class: any = ComponentFactory[style]
+	if not class then
+		warn("Unknown component style:", style)
+		return
+	end
+
+	local newComponent: any = class.new(self.Window, self.Dropdown, data)
+	local dropdown = self.Dropdown :: Frame
+
+	if self.DropdownOpen then
+		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local newHeight = dropdownLayout.AbsoluteContentSize.Y
+		Util.tween(self.Dropdown, {
+			Size = UDim2.new(1, 0, 0, newHeight)
+		}, 0.15)
+	end
+
+	self:_updateArrowVisibility()
+
+	task.defer(function()
+		self.Window:_updateColumnSize()
+	end)
+
+	return newComponent
 end
 
--- // Pills ( Buttons )
-local Pill = {}
-Pill.__index = Pill
+function Column:addSlider(data: SliderData)
+	return Slider.new(self.Window, self.Frame, data)
+end
 
-function Pill.new(parent: Instance, name: string, iconName: string?, cb)
-	local self = setmetatable({}, Pill)
+-- \\ Pills ( Buttons )
+export type PillData = {
+	Name: string,
+	Icon: string?,
+	Callback: () -> (),
+	Style: string?,
+}
+
+export type PillType = {
+	Window: WindowType,
+	Frame: TextButton,
+}
+
+function Pill.new(window: WindowType, parent: Instance, data: PillData): PillType
+	local name: string = data.Name or "Pill"
+	local iconName: string? = data.Icon or ""
+	local cb: () -> () = data.Callback or function() end
+
+	local self = setmetatable({}, Pill) :: PillType
+	self.Window = window
 
 	local b = Instance.new("TextButton")
 	b.Size = UDim2.new(1, 0, 0, 32)
@@ -666,46 +967,38 @@ function Pill.new(parent: Instance, name: string, iconName: string?, cb)
 	l.Parent = b
 
 	b.MouseEnter:Connect(function()
-		Util.tween(b, {BackgroundColor3 = GetTheme().hover})
+		if b.Parent and b.Parent.Name == "Dropdown" then
+			Util.tween(b, {BackgroundColor3 = GetTheme().bg})
+		else
+			Util.tween(b, {BackgroundColor3 = GetTheme().pillHover})
+		end
 	end)
 
 	b.MouseLeave:Connect(function()
 		Util.tween(b, {BackgroundColor3 = GetTheme().pill})
 	end)
 
-	b.MouseButton1Click:Connect(cb)
+	b.MouseButton1Click:Connect(function()
+		cb()
+	end)
 
 	self.Frame = b
 	return self
 end
 
-export type PillData = {
-	Name: string,
-	Icon: string?,
-	Callback: () -> ()
-}
-
 function Column:addPill(data: PillData)
-	local name = data.Name or "Pill"
-	local icon = data.Icon or ""
-	local cb = data.Callback or function() end
-	return Pill.new(self.Frame, name, icon, cb)
+	return Pill.new(self.Window, self.Frame, data)
 end
 
--- \\ Player Lists
-local PlayerList = {}
-PlayerList.__index = PlayerList
-
-local MiniButton = {}
-MiniButton.__index = MiniButton
-
+-- // Player Lists
 export type PlayerListType = {
 	Frame: Frame,
 	List: ScrollingFrame,
-	Plrs: { [Player]: TextButton },
-	
+	Window: WindowType,
+	Plrs: { [Frame]: Player },
+
 	_refresh: (self: PlayerListType) -> (),
-	AddMiniButton: (self: PlayerListType, cfg: MiniButtonConfig) -> ()
+	AddMiniButton: (self: PlayerListType, cfg: MiniButtonConfig) -> (),
 }
 
 export type MiniButtonConfig = {
@@ -714,8 +1007,9 @@ export type MiniButtonConfig = {
 	Callback: (Player) -> (),
 }
 
-function PlayerList.new(parent: Instance): PlayerListType
+function PlayerList.new(window: WindowType, parent: Instance, table: {}): PlayerListType
 	local self = setmetatable({}, PlayerList) :: PlayerListType
+	self.Window = window
 
 	local wrap = Instance.new("Frame")
 	wrap.Size = UDim2.new(1, 0, 0, 190)
@@ -779,7 +1073,7 @@ function PlayerList:_refresh()
 			row.BackgroundTransparency = 1
 			row.Parent = self.List
 			Util.corner(row, 5)
-			
+
 			self.Plrs[row] = plr
 
 			row.MouseEnter:Connect(function()
@@ -804,11 +1098,11 @@ function PlayerList:_refresh()
 	end
 end
 
-function Column:AddPlayerList()
-	return PlayerList.new(self.Frame)
+function Column:addPlayerList()
+	return PlayerList.new(self.Window, self.Frame, {})
 end
 
--- // Player List Mini Buttons
+-- \\ Player List Mini Buttons
 function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 	local b = Instance.new("TextButton")
 	b.Size = UDim2.fromOffset(30, 22)
@@ -823,11 +1117,11 @@ function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 
 	Util.corner(b, 5)
 	Util.stroke(b, GetTheme().pillBrd, 0.3)
-	
+
 	b.MouseEnter:Connect(function()
 		Util.tween(b, {BackgroundColor3 = GetTheme().hover})
 	end)
-	
+
 	b.MouseLeave:Connect(function()
 		Util.tween(b, {BackgroundColor3 = GetTheme().pill})
 	end)
@@ -852,6 +1146,49 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
+-- // Options (standalone, not factory-based)
+function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
+	local self = setmetatable({}, Option)
+
+	name = name or "Option"
+	cb = cb or function() end
+
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0, 28)
+	f.BackgroundColor3 = GetTheme().hover
+	f.BackgroundTransparency = 1
+	f.Parent = parentComponent.Frame
+	Util.corner(f, 6)
+
+	f.MouseEnter:Connect(function()
+		Util.tween(f, {BackgroundTransparency = 0})
+	end)
+
+	f.MouseLeave:Connect(function()
+		Util.tween(f, {BackgroundTransparency = 1})
+	end)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -20, 1, 0)
+	lbl.Position = UDim2.fromOffset(10, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.Text = name
+	lbl.TextColor3 = GetTheme().text
+	lbl.TextSize = 13
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = f
+
+	f.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			cb()
+		end
+	end)
+
+	self.Frame = f
+	return self
+end
+
 -- \\ Module Export
 local RebornUI = {
 	Window = Window,
@@ -862,10 +1199,11 @@ local RebornUI = {
 	Pill = Pill,
 	PlayerList = PlayerList,
 	MiniButton = MiniButton,
-	
+	Option = Option,
+
 	Themes = Themes,
 	SetTheme = SetTheme,
-	GetTheme = GetTheme
+	GetTheme = GetTheme,
 }
 
 return RebornUI
