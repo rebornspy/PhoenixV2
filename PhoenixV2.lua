@@ -496,11 +496,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	Util.corner(f, 6)
 
 	f.MouseEnter:Connect(function()
-		if f.Parent and f.Parent.Name == "Dropdown" then
-			Util.tween(f, {BackgroundColor3 = GetTheme().bg})
-		else
-			Util.tween(f, {BackgroundColor3 = GetTheme().hover})
-		end
+		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
 	end)
 
 	f.MouseLeave:Connect(function()
@@ -536,10 +532,10 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	list.Parent = drop
 
 	local dropPadding = Instance.new("UIPadding")
-	dropPadding.PaddingTop = UDim.new(0, 2)
-	dropPadding.PaddingBottom = UDim.new(0, 2)
-	dropPadding.PaddingLeft = UDim.new(0, 2)
-	dropPadding.PaddingRight = UDim.new(0, 2)
+	dropPadding.PaddingTop = UDim.new(0, 4)
+	dropPadding.PaddingBottom = UDim.new(0, 4)
+	dropPadding.PaddingLeft = UDim.new(0, 4)
+	dropPadding.PaddingRight = UDim.new(0, 4)
 	dropPadding.Parent = drop
 	Util.corner(drop, 8)
 
@@ -558,13 +554,13 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
 
 		Util.tween(self.Dropdown, {
-			Size = UDim2.new(1, -8, 0, targetHeight + 4)
+			Size = UDim2.new(1, -8, 0, targetHeight + 8)
 		}, 0.15)
 
 		local baseHeight = 34
 		if self.DropdownOpen then
 			Util.tween(self.Frame, {
-				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 8)
+				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 12)
 			}, 0.15)
 		else
 			Util.tween(self.Frame, {
@@ -707,11 +703,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	Util.corner(f, 6)
 
 	f.MouseEnter:Connect(function()
-		if f.Parent and f.Parent.Name == "Dropdown" then
-			Util.tween(f, {BackgroundColor3 = GetTheme().bg})
-		else
-			Util.tween(f, {BackgroundColor3 = GetTheme().hover})
-		end
+		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
 	end)
 
 	f.MouseLeave:Connect(function()
@@ -747,10 +739,10 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	list.Parent = drop
 
 	local dropPadding = Instance.new("UIPadding")
-	dropPadding.PaddingTop = UDim.new(0, 2)
-	dropPadding.PaddingBottom = UDim.new(0, 2)
-	dropPadding.PaddingLeft = UDim.new(0, 2)
-	dropPadding.PaddingRight = UDim.new(0, 2)
+	dropPadding.PaddingTop = UDim.new(0, 4)
+	dropPadding.PaddingBottom = UDim.new(0, 4)
+	dropPadding.PaddingLeft = UDim.new(0, 4)
+	dropPadding.PaddingRight = UDim.new(0, 4)
 	dropPadding.Parent = drop
 	Util.corner(drop, 8)
 
@@ -769,12 +761,12 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
 
 		Util.tween(self.Dropdown, {
-			Size = UDim2.new(1, -8, 0, targetHeight + 4)
+			Size = UDim2.new(1, -8, 0, targetHeight + 8)
 		}, 0.15)
 
 		local baseHeight = 34
 		Util.tween(self.Frame, {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 8)
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 12)
 		}, 0.15)
 
 		task.delay(0.1, function()
@@ -967,11 +959,7 @@ function Pill.new(window: WindowType, parent: Instance, data: PillData): PillTyp
 	l.Parent = b
 
 	b.MouseEnter:Connect(function()
-		if b.Parent and b.Parent.Name == "Dropdown" then
-			Util.tween(b, {BackgroundColor3 = GetTheme().bg})
-		else
-			Util.tween(b, {BackgroundColor3 = GetTheme().pillHover})
-		end
+		Util.tween(b, {BackgroundColor3 = GetTheme().pillHover})
 	end)
 
 	b.MouseLeave:Connect(function()
@@ -990,7 +978,7 @@ function Column:addPill(data: PillData)
 	return Pill.new(self.Window, self.Frame, data)
 end
 
--- // Player Lists
+--// Player Lists
 export type PlayerListType = {
 	Frame: Frame,
 	List: ScrollingFrame,
