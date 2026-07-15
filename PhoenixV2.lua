@@ -50,6 +50,17 @@ end
 -- \\ Utilities
 local Util = {}
 
+function Util.GetSafeParent()
+	local parent = nil
+	if gethui() or game:GetService("CoreGui") then
+    	if gethui() ~= nil then
+			parent = gethui()
+		elseif game:GetService("CoreGui") then
+			parent = game:GetService("CoreGui")
+		end
+    return parent
+end
+
 function Util.corner(p: Instance, r: number?)
 	local u = Instance.new("UICorner")
 	u.CornerRadius = UDim.new(0, r or 6)
@@ -142,8 +153,13 @@ export type WindowType = {
 }
 
 function Window.new(title: string): WindowType
+	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
+		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
+		holder:Destroy()
+	end
+	
 	local self = setmetatable({}, Window) :: WindowType
-
+	
 	local function makeDraggable(topbar: Frame)
 		local dragging = false
 		local dragStart: Vector3
@@ -176,11 +192,15 @@ function Window.new(title: string): WindowType
 		end)
 	end
 
+	local holder = Instance.new("Folder")
+	holder.Name = (title .. " Holder") or "PhoenixV2Holder"
+	holder.Parent = Util.GetSafeParent()
+
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "RebornAdmin"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
-	gui.Parent = LP:WaitForChild("PlayerGui")
+	gui.Parent = holder
 
 	local main = Instance.new("Frame")
 	main.Name = "Main"
