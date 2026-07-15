@@ -760,6 +760,11 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	local self = setmetatable({}, Slider) :: SliderType
 	self.Window = window
 
+	self._min = min
+	self._max = max
+	self._snap = snap
+	self._cb = cb
+
 	local f = Instance.new("Frame")
 	f.Name = name
 	f.LayoutOrder = layoutOrder
@@ -899,6 +904,11 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	knob.Parent = bar
 	Util.corner(knob, 6)
 
+	self._fill = fill
+	self._knob = knob
+	self._val = val
+	self._bar = bar
+
 	local dragging = false
 
 	local function setX(x: number)
@@ -947,6 +957,24 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	self.Frame = f
 	return self
 end
+
+function Slider:SetValue(v: number)
+    local min = self._min
+    local max = self._max
+    local snap = self._snap
+
+    v = math.clamp(v, min, max)
+    v = math.floor(v / snap + 0.5) * snap
+
+    local sr = (v - min) / (max - min)
+
+    self._fill.Size = UDim2.new(sr, 0, 1, 0)
+    self._knob.Position = UDim2.new(sr, 0, 0.5, 0)
+    self._val.Text = tostring(v)
+
+    self._cb(v)
+end
+
 
 function Slider:AddOption(data)
 	local style = data.Style
