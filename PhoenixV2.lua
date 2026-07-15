@@ -56,6 +56,7 @@ function Util.GetSafeParent()
 		elseif game:GetService("CoreGui") then
 			parent = game:GetService("CoreGui")
 		end
+	end
     return parent
 end
 
