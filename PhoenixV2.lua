@@ -192,11 +192,11 @@ function Window.new(title: string): WindowType
 	end
 
 	local holder = Instance.new("Folder")
-	holder.Name = (title .. " Holder") or "PhoenixV2Holder"
+	holder.Name = "holder"
 	holder.Parent = Util.GetSafeParent()
 
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "RebornAdmin"
+	gui.Name = title
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
 	gui.Parent = holder
