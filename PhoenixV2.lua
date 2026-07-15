@@ -1,5 +1,3 @@
---!strict
-
 -- Created and Maintained by reborb (@rebornspy).
 -- Inspired by various other GUI Suites.
 -- Works in studio, at the cost of no icons.
@@ -634,7 +632,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		end)
 	end)
 
-	function self:_updateArrowVisibility()
+	function self._updateArrowVisibility()
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
@@ -685,7 +683,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		cb(state)
 	end)
 
-	self:_updateArrowVisibility()
+	self._updateArrowVisibility()
 	self.Frame = f
 	return self
 end
@@ -743,6 +741,16 @@ export type SliderType = {
 	Arrow: ImageButton,
 	Dropdown: Frame,
 	DropdownOpen: boolean,
+
+    _min: number,
+    _max: number,
+    _snap: number,
+    _cb: (number) -> (),
+
+    _fill: Frame,
+    _knob: Frame,
+    _bar: Frame,
+    _val: TextLabel,
 
 	_updateArrowVisibility: () -> (),
 	AddOption: (self: SliderType, data: SliderData) -> (),
@@ -846,7 +854,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		end)
 	end)
 
-	function self:_updateArrowVisibility()
+	function self._updateArrowVisibility()
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
@@ -952,7 +960,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		end
 	end)
 
-	self:_updateArrowVisibility()
+	self._updateArrowVisibility()
 
 	self.Frame = f
 	return self
