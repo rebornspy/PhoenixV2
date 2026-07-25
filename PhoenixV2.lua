@@ -1146,6 +1146,7 @@ function PlayerList.new(window: WindowType, parent: Instance, table: {}?): Playe
 	self.Frame = wrap
 	self.List = list
 	self.Plrs = {}
+	self.MiniButtonConfigs = {}
 
 	self:_refresh()
 
@@ -1199,6 +1200,10 @@ function PlayerList:_refresh()
 			name.TextSize = 12
 			name.TextXAlignment = Enum.TextXAlignment.Left
 			name.Parent = row
+
+			for _, cfg in ipairs(self.MiniButtonConfigs) do
+                MiniButton.new(row, plr, cfg)
+            end
 		end
 	end
 end
@@ -1242,6 +1247,8 @@ function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 end
 
 function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
+	table.insert(self.MiniButtonConfigs, cfg)
+	
     for plr, row in pairs(self.Plrs) do
         MiniButton.new(row, plr, cfg)
     end
