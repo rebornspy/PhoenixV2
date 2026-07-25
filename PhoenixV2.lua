@@ -457,7 +457,7 @@ function Column:ReorderChildren(sortFunc)
 	end)
 end
 
-function Window:addColumn(order: number)
+function Window:AddColumn(order: number)
 	local col = Column.new(self.Body, order, self)
 	self:_updateColumnSize()
 	return col
@@ -512,7 +512,7 @@ function Section.new(parent: Instance, data: SectionData): SectionType
 	return self
 end
 
-function Column:addSection(data: SectionData)
+function Column:AddSection(data: SectionData)
 	return Section.new(self.Frame, data)
 end
 
@@ -720,7 +720,7 @@ function Toggle:AddOption(data)
 	end)
 end
 
-function Column:addToggle(data: ToggleData)
+function Column:AddToggle(data: ToggleData)
 	return Toggle.new(self.Window, self.Frame, data)
 end
 
@@ -984,7 +984,6 @@ function Slider:SetValue(v: number)
     self._cb(v)
 end
 
-
 function Slider:AddOption(data)
 	local style = data.Style
 	if not style then
@@ -1018,7 +1017,7 @@ function Slider:AddOption(data)
 	return newComponent
 end
 
-function Column:addSlider(data: SliderData)
+function Column:AddSlider(data: SliderData)
 	return Slider.new(self.Window, self.Frame, data)
 end
 
@@ -1086,7 +1085,7 @@ function Pill.new(window: WindowType, parent: Instance, data: PillData): PillTyp
 	return self
 end
 
-function Column:addPill(data: PillData)
+function Column:AddPill(data: PillData)
 	return Pill.new(self.Window, self.Frame, data)
 end
 
@@ -1168,6 +1167,8 @@ function PlayerList:_refresh()
 		end
 	end
 
+	self.Plrs = {}
+	
 	for _, plr: Player in ipairs(Players:GetPlayers()) do
 		if plr ~= LP then
 			local row: Frame = Instance.new("Frame") :: Frame
@@ -1178,7 +1179,7 @@ function PlayerList:_refresh()
 			row.Parent = self.List
 			Util.corner(row, 5)
 
-			self.Plrs[row] = plr
+			self.Plrs[plr] = row
 
 			row.MouseEnter:Connect(function()
 				Util.tween(row, {BackgroundTransparency = 0})
@@ -1202,7 +1203,7 @@ function PlayerList:_refresh()
 	end
 end
 
-function Column:addPlayerList()
+function Column:AddPlayerList()
 	return PlayerList.new(self.Window, self.Frame, {})
 end
 
@@ -1241,14 +1242,9 @@ function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 end
 
 function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
-	for _, row: any in ipairs(self.List:GetChildren()) do
-		if row:IsA("Frame") then
-			local plr = self.Plrs[row]
-			if plr then
-				MiniButton.new(row, plr, cfg)
-			end
-		end
-	end
+    for plr, row in pairs(self.Plrs) do
+        MiniButton.new(row, plr, cfg)
+    end
 end
 
 -- // Options
