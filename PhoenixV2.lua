@@ -51,13 +51,13 @@ local Util = {}
 function Util.GetSafeParent()
 	local parent = nil
 	if gethui() or game:GetService("CoreGui") then
-    	if gethui() ~= nil then
+		if gethui() ~= nil then
 			parent = gethui()
 		elseif game:GetService("CoreGui") then
 			parent = game:GetService("CoreGui")
 		end
 	end
-    return parent
+	return parent
 end
 
 function Util.corner(p: Instance, r: number?)
@@ -156,9 +156,9 @@ function Window.new(title: string): WindowType
 		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
 		holder:Destroy()
 	end
-	
+
 	local self = setmetatable({}, Window) :: WindowType
-	
+
 	local function makeDraggable(topbar: Frame)
 		local dragging = false
 		local dragStart: Vector3
@@ -193,7 +193,7 @@ function Window.new(title: string): WindowType
 
 	local holder = Instance.new("Folder")
 	holder.Name = "holder"
-	holder.Parent = Util.GetSafeParent()
+	holder.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 	local gui = Instance.new("ScreenGui")
 	gui.Name = title
@@ -480,7 +480,7 @@ function Section.new(parent: Instance, data: SectionData): SectionType
 	local iconName = data.Icon or ""
 	local first = data.First or false
 	local layoutOrder = (first and 0 or data.LayoutOrder) or 0
-	
+
 	local self = setmetatable({}, Section) :: SectionType
 
 	local frame = Instance.new("Frame")
@@ -507,10 +507,20 @@ function Section.new(parent: Instance, data: SectionData): SectionType
 	label.TextSize = 11
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = frame
+	
+	self.label = label
 
 	self.Frame = frame
 	return self
 end
+
+function Section:Update(newName: string)
+	if newName and newName ~= "" then
+		self.label.Text = string.upper(newName)
+		self.Frame.Name = newName
+	end
+end
+
 
 function Column:AddSection(data: SectionData)
 	return Section.new(self.Frame, data)
@@ -563,10 +573,71 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
 	end)
 
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Text"
+	lbl.Size = UDim2.new(1, -54, 0, 0)
+	lbl.Position = UDim2.fromOffset(10, 17)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.Text = name
+	lbl.TextColor3 = GetTheme().text
+	lbl.TextSize = 13
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = f
+
+	local sw = Instance.new("TextButton")
+	sw.Name = "Switch"
+	sw.Size = UDim2.fromOffset(34, 18)
+	sw.Position = UDim2.new(1, -42, 0, 7)
+	sw.BackgroundColor3 = default and GetTheme().blue or GetTheme().trackOff
+	sw.Text = ""
+	sw.AutoButtonColor = false
+	sw.Parent = f
+	Util.corner(sw, 9)
+
+	local knob = Instance.new("Frame")
+	knob.Name = "Knob"
+	knob.Size = UDim2.fromOffset(14, 14)
+	knob.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+	knob.BackgroundColor3 = GetTheme().knob
+	knob.BorderSizePixel = 0
+	knob.Parent = sw
+	Util.corner(knob, 7)
+
+	local state = default
+
+	f.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			state = not state
+
+			Util.tween(sw, {BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff}, 0.15)
+			Util.tween(knob, {
+				Position = state
+					and UDim2.new(1, -16, 0.5, -7)
+					or UDim2.new(0, 2, 0.5, -7)
+			}, 0.15)
+
+			cb(state)
+		end
+	end)
+	
+	sw.MouseButton1Click:Connect(function()
+		state = not state
+
+		Util.tween(sw, {BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff}, 0.15)
+		Util.tween(knob, {
+			Position = state
+				and UDim2.new(1, -16, 0.5, -7)
+				or UDim2.new(0, 2, 0.5, -7)
+		}, 0.15)
+
+		cb(state)
+	end)
+
 	local arrow = Instance.new("ImageButton")
 	arrow.Size = UDim2.fromOffset(16, 16)
 	arrow.Name = "DropdownArrow"
-	arrow.Position = UDim2.new(1, -40, 0, 8)
+	arrow.Position = UDim2.new(1, -(sw.AbsoluteSize.X + 14), 0, 8)
 	arrow.AnchorPoint = Vector2.new(1, 0)
 	arrow.BackgroundTransparency = 1
 	arrow.Image = "rbxassetid://6031094670"
@@ -637,53 +708,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Name = "Text"
-	lbl.Size = UDim2.new(1, -54, 0, 0)
-	lbl.Position = UDim2.fromOffset(10, 17)
-	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
-	lbl.Text = name
-	lbl.TextColor3 = GetTheme().text
-	lbl.TextSize = 13
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = f
-
-	local sw = Instance.new("TextButton")
-	sw.Name = "Switch"
-	sw.Size = UDim2.fromOffset(34, 18)
-	sw.Position = UDim2.new(1, -42, 0, 7)
-	sw.BackgroundColor3 = default and GetTheme().blue or GetTheme().trackOff
-	sw.Text = ""
-	sw.AutoButtonColor = false
-	sw.Parent = f
-	Util.corner(sw, 9)
-
-	local knob = Instance.new("Frame")
-	knob.Name = "Knob"
-	knob.Size = UDim2.fromOffset(14, 14)
-	knob.Position = default and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-	knob.BackgroundColor3 = GetTheme().knob
-	knob.BorderSizePixel = 0
-	knob.Parent = sw
-	Util.corner(knob, 7)
-
-	local state = default
-
-	sw.MouseButton1Click:Connect(function()
-		state = not state
-
-		Util.tween(sw, {BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff}, 0.15)
-		Util.tween(knob, {
-			Position = state
-				and UDim2.new(1, -16, 0.5, -7)
-				or UDim2.new(0, 2, 0.5, -7)
-		}, 0.15)
-
-		cb(state)
-	end)
-
+	
 	self._updateArrowVisibility()
 	self.Frame = f
 	return self
@@ -743,15 +768,15 @@ export type SliderType = {
 	Dropdown: Frame,
 	DropdownOpen: boolean,
 
-    _min: number,
-    _max: number,
-    _snap: number,
-    _cb: (number) -> (),
+	_min: number,
+	_max: number,
+	_snap: number,
+	_cb: (number) -> (),
 
-    _fill: Frame,
-    _knob: Frame,
-    _bar: Frame,
-    _val: TextLabel,
+	_fill: Frame,
+	_knob: Frame,
+	_bar: Frame,
+	_val: TextLabel,
 
 	_updateArrowVisibility: () -> (),
 	AddOption: (self: SliderType, data: SliderData) -> (),
@@ -791,10 +816,48 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
 	end)
 
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Text"
+	lbl.Size = UDim2.new(1, -20, 0, 18)
+	lbl.Position = UDim2.fromOffset(10, 7)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.Text = name
+	lbl.TextColor3 = GetTheme().text
+	lbl.TextSize = 13
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = f
+
+	local val = Instance.new("TextLabel")
+	val.Name = "Value"
+	val.AutomaticSize = Enum.AutomaticSize.X
+	val.AnchorPoint = Vector2.new(1, 0)
+	val.Size = UDim2.fromOffset(0, 18)
+	val.Position = UDim2.new(1, -8, 0, 7)
+	val.BackgroundTransparency = 1
+	val.Font = Enum.Font.GothamBold
+	val.Text = tostring(default)
+	val.TextColor3 = GetTheme().text
+	val.TextSize = 13
+	val.TextXAlignment = Enum.TextXAlignment.Right
+	val.Parent = f
+
+	local bar = Instance.new("Frame")
+	bar.Name = "Bar"
+	bar.Size = UDim2.new(1, -20, 0, 4)
+	bar.Position = UDim2.fromOffset(10, 30)
+	bar.BackgroundColor3 = GetTheme().trackOff
+	bar.BorderSizePixel = 0
+	bar.Parent = f
+	Util.corner(bar, 2)
+
+	local rel = (default - min) / (max - min)
+
 	local arrow = Instance.new("ImageButton")
 	arrow.Name = "DropdownArrow"
 	arrow.Size = UDim2.fromOffset(16, 16)
-	arrow.Position = UDim2.new(1, -20, 0, 8)
+	arrow.Position = UDim2.fromScale(0, 0)
 	arrow.AnchorPoint = Vector2.new(1, 0)
 	arrow.BackgroundTransparency = 1
 	arrow.Image = "rbxassetid://6031094670"
@@ -809,7 +872,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	drop.BorderSizePixel = 0
 	drop.BackgroundColor3 = GetTheme().bg
 	drop.ZIndex = 1
-	drop.Position = UDim2.new(0, 4, 0, 34)
+	drop.Position = UDim2.new(0, 4, 0, 40)
 	drop.Size = UDim2.new(1, -8, 0, 0)
 	drop.ClipsDescendants = true
 	drop.Parent = f
@@ -847,7 +910,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 
 		local baseHeight = 34
 		Util.tween(self.Frame, {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 12)
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 18)
 		}, 0.15)
 
 		task.delay(0.1, function()
@@ -859,42 +922,12 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Name = "Text"
-	lbl.Size = UDim2.new(1, -20, 0, 18)
-	lbl.Position = UDim2.fromOffset(10, 7)
-	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
-	lbl.Text = name
-	lbl.TextColor3 = GetTheme().text
-	lbl.TextSize = 13
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = f
-
-	local val = Instance.new("TextLabel")
-	val.Name = "Value"
-	val.Size = UDim2.fromOffset(50, 18)
-	val.Position = UDim2.new(1, -58, 0, 7)
-	val.BackgroundTransparency = 1
-	val.Font = Enum.Font.GothamBold
-	val.Text = tostring(default)
-	val.TextColor3 = GetTheme().text
-	val.TextSize = 13
-	val.TextXAlignment = Enum.TextXAlignment.Right
-	val.Parent = f
-
-	local bar = Instance.new("Frame")
-	bar.Name = "Bar"
-	bar.Size = UDim2.new(1, -20, 0, 4)
-	bar.Position = UDim2.fromOffset(10, 30)
-	bar.BackgroundColor3 = GetTheme().trackOff
-	bar.BorderSizePixel = 0
-	bar.Parent = f
-	Util.corner(bar, 2)
-
-	local rel = (default - min) / (max - min)
-
+	
+	function self:_updateArrowPosition()
+		local valWidth = val.AbsoluteSize.X
+		arrow.Position = UDim2.new(1, -(valWidth + 18), 0, 8)
+	end
+	
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
 	fill.Size = UDim2.new(rel, 0, 1, 0)
@@ -905,6 +938,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 
 	local knob = Instance.new("Frame")
 	knob.Name = "Knob"
+	knob.ZIndex = 2
 	knob.Size = UDim2.fromOffset(12, 12)
 	knob.AnchorPoint = Vector2.new(0.5, 0.5)
 	knob.Position = UDim2.new(rel, 0, 0.5, 0)
@@ -932,12 +966,15 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		fill.Size = UDim2.new(sr, 0, 1, 0)
 		knob.Position = UDim2.new(sr, 0, 0.5, 0)
 		val.Text = tostring(v)
+		
+		self:_updateArrowPosition()
 
 		cb(v)
 	end
 
 	bar.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			local leftSidePos = val.Position.X.Offset - (val.AnchorPoint.X * val.AbsoluteSize.X)
 			dragging = true
 			setX(i.Position.X)
 		end
@@ -962,26 +999,27 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	end)
 
 	self._updateArrowVisibility()
+	self._updateArrowPosition()
 
 	self.Frame = f
 	return self
 end
 
 function Slider:SetValue(v: number)
-    local min = self._min
-    local max = self._max
-    local snap = self._snap
+	local min = self._min
+	local max = self._max
+	local snap = self._snap
 
-    v = math.clamp(v, min, max)
-    v = math.floor(v / snap + 0.5) * snap
+	v = math.clamp(v, min, max)
+	v = math.floor(v / snap + 0.5) * snap
 
-    local sr = (v - min) / (max - min)
+	local sr = (v - min) / (max - min)
 
-    self._fill.Size = UDim2.new(sr, 0, 1, 0)
-    self._knob.Position = UDim2.new(sr, 0, 0.5, 0)
-    self._val.Text = tostring(v)
+	self._fill.Size = UDim2.new(sr, 0, 1, 0)
+	self._knob.Position = UDim2.new(sr, 0, 0.5, 0)
+	self._val.Text = tostring(v)
 
-    self._cb(v)
+	self._cb(v)
 end
 
 function Slider:AddOption(data)
@@ -1169,9 +1207,9 @@ function PlayerList:_refresh()
 	end
 
 	self.Plrs = {}
-	
+
 	for _, plr: Player in ipairs(Players:GetPlayers()) do
-		if plr ~= LP then
+		if plr then
 			local row: Frame = Instance.new("Frame") :: Frame
 			row.Name = plr.Name .. " PlayerListFrame"
 			row.Size = UDim2.new(1, 0, 0, 26)
@@ -1202,8 +1240,8 @@ function PlayerList:_refresh()
 			name.Parent = row
 
 			for _, cfg in ipairs(self.MiniButtonConfigs) do
-                MiniButton.new(row, plr, cfg)
-            end
+				MiniButton.new(row, plr, cfg)
+			end
 		end
 	end
 end
@@ -1248,10 +1286,10 @@ end
 
 function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	table.insert(self.MiniButtonConfigs, cfg)
-	
-    for plr, row in pairs(self.Plrs) do
-        MiniButton.new(row, plr, cfg)
-    end
+
+	for plr, row in pairs(self.Plrs) do
+		MiniButton.new(row, plr, cfg)
+	end
 end
 
 -- // Options
