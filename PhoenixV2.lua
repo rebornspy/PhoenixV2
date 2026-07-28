@@ -193,7 +193,7 @@ function Window.new(title: string): WindowType
 
 	local holder = Instance.new("Folder")
 	holder.Name = "holder"
-	holder.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	holder.Parent = Util.GetSafeParent()
 
 	local gui = Instance.new("ScreenGui")
 	gui.Name = title
