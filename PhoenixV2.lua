@@ -3,30 +3,30 @@
 -- Works in studio, at the cost of no icons.
 
 -- \\ Globals & Services
-local Players:  Players = game:GetService("Players")                    :: Players
-local UIS:      UserInputService = game:GetService("UserInputService")  :: UserInputService
-local ts:       TweenService = game:GetService("TweenService")          :: TweenService
+local Players: Players = game:GetService("Players") :: Players
+local UIS: UserInputService = game:GetService("UserInputService") :: UserInputService
+local ts: TweenService = game:GetService("TweenService") :: TweenService
 
-local LP:       Player = Players.LocalPlayer    ::  Player
+local LP: Player = Players.LocalPlayer :: Player
 
 -- // Themes
-local Themes    =   {
-	Dark        =   {
-		bg          =   Color3.fromRGB(17,  17, 20  );
-		header      =   Color3.fromRGB(23,  23, 27  );
-		colbg       =   Color3.fromRGB(24,  24, 29  );
-		border      =   Color3.fromRGB(44,  44, 51  );
-		hover       =   Color3.fromRGB(34,  34, 40  );
-		pillHover   =   Color3.fromRGB(44,  44, 50  );
-		text        =   Color3.fromRGB(233, 233, 238);
-		dim         =   Color3.fromRGB(150, 150, 160);
-		faint       =   Color3.fromRGB(105, 105, 116);
-		blue        =   Color3.fromRGB(72,  130, 248);
-		red         =   Color3.fromRGB(220, 80, 90  );
-		trackOff    =   Color3.fromRGB(58,  58, 66  );
-		pill        =   Color3.fromRGB(33,  33, 40  );
-		pillBrd     =   Color3.fromRGB(54,  54, 62  );
-		knob        =   Color3.fromRGB(240, 240, 245);
+local Themes = {
+	Dark = {
+		bg = Color3.fromRGB(17, 17, 20);
+		header = Color3.fromRGB(23, 23, 27);
+		colbg = Color3.fromRGB(24, 24, 29);
+		border = Color3.fromRGB(44, 44, 51);
+		hover = Color3.fromRGB(34, 34, 40);
+		pillHover = Color3.fromRGB(44, 44, 50);
+		text = Color3.fromRGB(233, 233, 238);
+		dim = Color3.fromRGB(150, 150, 160);
+		faint = Color3.fromRGB(105, 105, 116);
+		blue = Color3.fromRGB(72, 130, 248);
+		red = Color3.fromRGB(220, 80, 90);
+		trackOff = Color3.fromRGB(58, 58, 66);
+		pill = Color3.fromRGB(33, 33, 40);
+		pillBrd = Color3.fromRGB(54, 54, 62);
+		knob = Color3.fromRGB(240, 240, 245);
 	};
 }
 
@@ -67,12 +67,13 @@ function Util.corner(p: Instance, r: number?)
 	return u
 end
 
-function Util.stroke(p: Instance, col: Color3, t: number?)
+function Util.stroke(p: Instance, col: Color3, t: number?, tr: number?)
 	local s = Instance.new("UIStroke")
 	s.Color = col
-	s.Thickness = 1
-	s.Transparency = t or 0
+	s.Thickness = t or 1
+	s.Transparency = tr or 0
 	s.Parent = p
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 end
 
 function Util.tween(obj: Instance, props: {[string]: any}, time: number?)
@@ -130,32 +131,52 @@ PlayerList.__index = PlayerList
 local MiniButton = {}
 MiniButton.__index = MiniButton
 
+local Keybind = {}
+Keybind.__index = Keybind
+
 local Option = {}
 Option.__index = Option
 
 local ComponentFactory = {
-	Toggle = Toggle,
-	Slider = Slider,
-	Button = Pill,
+	Toggle = Toggle;
+	Slider = Slider;
+	Button = Pill;
+	Keybind = Keybind;
 }
 
 -- // Windows
 export type WindowType = {
-	Gui: ScreenGui,
-	Main: Frame,
-	Body: ScrollingFrame,
-
-	_makeResizable: (self: WindowType, handle: Frame) -> (),
-	_updateColumnSize: (self: WindowType) -> (),
-	RefreshTheme: (self: WindowType) -> (),
-	addColumn: (self: WindowType, order: number) -> ColumnType,
+	Gui: ScreenGui;
+	Main: Frame;
+	Body: ScrollingFrame;
+	Visible: boolean;
+	Minimized: boolean;
+	PrevSize: UDim2;
+	NumberOfColumns: number;
+	
+	_makeResizable: (self: WindowType, handle: Frame) -> ();
+	_updateColumnSize: (self: WindowType) -> ();
+	RefreshTheme: (self: WindowType) -> ();
+	addColumn: (self: WindowType, order: number) -> ColumnType;
+	Minimize: (self: WindowType, minimized: boolean) -> ();
+	ToggleUi: (self: WindowType, toggled: boolean) -> ();
 }
 
-function Window.new(title: string): WindowType
-	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
+export type WindowData = {
+	Name: string;
+	Icon: string;
+	CloseKeybind: Enum.KeyCode;
+}
+
+function Window.new(data: WindowData): WindowType
+	 	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
 		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
 		holder:Destroy()
 	end
+	
+	local title = data.Name or "Window"
+	local icon = data.Icon or "zap"
+	local closeKeybind = data.CloseKeybind or Enum.KeyCode.RightShift
 
 	local self = setmetatable({}, Window) :: WindowType
 
@@ -219,8 +240,10 @@ function Window.new(title: string): WindowType
 	header.BackgroundColor3 = GetTheme().header
 	header.Parent = main
 	Util.corner(header, 12)
+	
+	self.Header = header
 
-	Icon(header, "zap", 16, GetTheme().blue).Position = UDim2.fromOffset(16, 14)
+	Icon(header, icon, 16, GetTheme().blue).Position = UDim2.fromOffset(16, 14)
 
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(0.5, 0, 1, 0)
@@ -262,6 +285,79 @@ function Window.new(title: string): WindowType
 	self.Gui = gui
 	self.Main = main
 	self.Body = body
+	self.Visible = true
+	self.Minimized = false
+	
+	self.PrevSize = self.Main.Size
+	
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "Close"
+	closeButton.Size = UDim2.new(0, 24, 0, 24)
+	closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeButton.Position = UDim2.new(1, -24, 0.5, 0)
+	closeButton.BackgroundColor3 = GetTheme().pill
+	closeButton.Text = "x"
+	closeButton.TextColor3 = GetTheme().text
+	closeButton.TextSize = 14
+	closeButton.Font = Enum.Font.GothamBold
+	closeButton.Parent = header
+	Util.corner(closeButton, 6)
+	
+	closeButton.MouseButton1Click:Connect(function()
+		self:ToggleUi(false)
+		self.Visible = false
+	end)
+	
+	UIS.InputBegan:Connect(function(input)
+		if input.KeyCode == closeKeybind then
+			if self.Visible then
+				self:ToggleUi(false)
+				self.Visible = false
+			else
+				self:ToggleUi(true)
+				self.Visible = true
+			end
+		end
+	end)
+	
+	local minimizeButton = Instance.new("TextButton")
+	minimizeButton.Name = "Minimize"
+	minimizeButton.Size = UDim2.new(0, 24, 0, 24)
+	minimizeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+	minimizeButton.Position = UDim2.new(1, -60, 0.5, 0)
+	minimizeButton.BackgroundColor3 = GetTheme().pill
+	minimizeButton.Text = "-"
+	minimizeButton.TextColor3 = GetTheme().text
+	minimizeButton.TextSize = 16
+	minimizeButton.Font = Enum.Font.GothamBold
+	minimizeButton.Parent = header
+	Util.corner(minimizeButton, 6)
+	
+	minimizeButton.MouseButton1Click:Connect(function()
+		if self.Minimized then
+			self:Minimize(false)
+			
+			Util.tween(minimizeButton,
+				{Rotation = 0},
+				0.25
+			)
+			
+			task.delay(0.125, function()
+				minimizeButton.Text = "-"
+			end)
+		else
+			self:Minimize(true)
+			
+			Util.tween(minimizeButton,
+				{Rotation = 90},
+				0.25
+			)
+
+			task.delay(0.125, function()
+				minimizeButton.Text = "+"
+			end)
+		end
+	end)
 
 	self:_makeResizable(handle)
 
@@ -269,7 +365,11 @@ function Window.new(title: string): WindowType
 		self:_updateColumnSize()
 	end)
 
-	self:_updateColumnSize()
+	task.delay(0.5, function()
+		self:_updateColumnSize()
+	end)
+	
+	self.NumberOfColumns = 0
 
 	return self
 end
@@ -387,19 +487,64 @@ function Window:RefreshTheme()
 	end
 end
 
+function Window:Minimize(minimized)
+	if minimized then
+		self.Body.Visible = false
+		self.Minimized = true
+		local handle = self.Main:FindFirstChild("ResizeHandle")
+		if handle then handle.Visible = false end
+		
+		self.PrevSize = self.Main.Size
+		local targetXOffset = self.Main.Size.X.Offset - (self.Main.Size.X.Offset*(4/7))
+		
+		if targetXOffset < 250 then
+			targetXOffset = 250
+		end
+
+		Util.tween(self.Main, {
+			Size = UDim2.new(self.Main.Size.X.Scale, targetXOffset, 0, self.Header.Size.Y.Offset)
+		}, 0.15)
+	else
+		self.Body.Visible = true
+		self.Minimized = false
+		local handle = self.Main:FindFirstChild("ResizeHandle")
+		if handle then handle.Visible = true end
+		
+		if self.PrevSize then
+			Util.tween(self.Main, {
+				Size = self.PrevSize
+			}, 0.15)
+		end
+	end
+end
+
+function Window:ToggleUi(toggled)
+	if toggled then
+		self.Main.Visible = true
+		self.Visible = true
+	else
+		self.Main.Visible = false
+		self.Visible = false
+	end
+end
+
 -- \\ Columns
 export type ColumnType = {
-	Frame: Frame,
-	Window: WindowType,
-
-	addSection: (self: ColumnType, data: SectionData) -> SectionType,
-	addToggle: (self: ColumnType, data: ToggleData) -> ToggleType,
-	addSlider: (self: ColumnType, data: SliderData) -> SliderType,
-	addPill: (self: ColumnType, data: PillData) -> PillType,
-	addPlayerList: (self: ColumnType) -> PlayerListType,
+	Frame: Frame;
+	Window: WindowType;
+	
+	addSection: (self: ColumnType, data: SectionData) -> SectionType;
+	addToggle: (self: ColumnType, data: ToggleData) -> ToggleType;
+	addSlider: (self: ColumnType, data: SliderData) -> SliderType;
+	addPill: (self: ColumnType, data: PillData) -> PillType;
+	addPlayerList: (self: ColumnType) -> PlayerListType;
 }
-function Column.new(parent: Instance, order: number, window: WindowType): ColumnType
+
+function Column.new(parent: Instance, window: WindowType): ColumnType
 	local self = setmetatable({}, Column) :: ColumnType
+
+	self.Window = window
+	local order = self.Window.NumberOfColumns + 1
 
 	local col = Instance.new("Frame")
 	col.Name = "Column" .. tostring(order)
@@ -427,7 +572,8 @@ function Column.new(parent: Instance, order: number, window: WindowType): Column
 	layout.Parent = col
 
 	self.Frame = col
-	self.Window = window
+	
+	self.Window.NumberOfColumns += 1
 
 	return self
 end
@@ -457,22 +603,22 @@ function Column:ReorderChildren(sortFunc)
 	end)
 end
 
-function Window:AddColumn(order: number)
-	local col = Column.new(self.Body, order, self)
+function Window:AddColumn()
+	local col = Column.new(self.Body, self)
 	self:_updateColumnSize()
 	return col
 end
 
 -- // Sections
 export type SectionType = {
-	Frame: Frame,
+	Frame: Frame;
 }
 
 export type SectionData = {
-	Name: string,
-	Icon: string?,
-	First: boolean?,
-	LayoutOrder: number?,
+	Name: string;
+	Icon: string?;
+	First: boolean?;
+	LayoutOrder: number?;
 }
 
 function Section.new(parent: Instance, data: SectionData): SectionType
@@ -1292,7 +1438,183 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
--- // Options
+-- // Keybinds
+export type KeybindType = {
+	Frame: Frame,
+	Arrow: ImageButton,
+	Dropdown: Frame,
+	DropdownOpen: boolean,
+	Window: WindowType,
+	CurrentKey: Enum.KeyCode,
+	_updateArrowVisibility: (self: KeybindType) -> (),
+}
+
+export type KeybindData = {
+	Name: string,
+	Keybind: Enum.KeyCode,
+	LayoutOrder: number?,
+	Callback: (Enum.KeyCode) -> (),
+}
+
+function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): KeybindType
+	local name = data.Name or "Keybind"
+	local layoutOrder = data.LayoutOrder or 1
+	local defaultKey = data.Keybind or Enum.KeyCode.F
+	local cb = data.Callback or function() end
+
+	local self = setmetatable({}, Keybind) :: KeybindType
+	self.Window = window
+	self.CurrentKey = defaultKey
+
+	local f = Instance.new("Frame")
+	f.Name = name
+	f.LayoutOrder = layoutOrder
+	f.Size = UDim2.new(1, 0, 0, 34)
+	f.BackgroundColor3 = GetTheme().colbg
+	f.BackgroundTransparency = 0
+	f.Parent = parent
+	Util.corner(f, 6)
+
+	f.MouseEnter:Connect(function()
+		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+	end)
+
+	f.MouseLeave:Connect(function()
+		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
+	end)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Text"
+	lbl.Size = UDim2.new(1, -60, 1, 0)
+	lbl.Position = UDim2.fromOffset(10, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamMedium
+	lbl.Text = name
+	lbl.TextColor3 = GetTheme().text
+	lbl.TextSize = 13
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = f
+
+	local keyBtn = Instance.new("TextButton")
+	keyBtn.Name = "KeyButton"
+	keyBtn.Size = UDim2.fromOffset(30, 22)
+	keyBtn.Position = UDim2.new(1, -40, 0.5, -11)
+	keyBtn.BackgroundColor3 = GetTheme().pill
+	keyBtn.Text = defaultKey.Name
+	keyBtn.Font = Enum.Font.GothamBold
+	keyBtn.TextSize = 12
+	keyBtn.TextColor3 = GetTheme().text
+	keyBtn.AutoButtonColor = false
+	keyBtn.Parent = f
+	Util.corner(keyBtn, 6)
+
+	keyBtn.MouseEnter:Connect(function()
+		Util.tween(keyBtn, {BackgroundColor3 = GetTheme().pillHover})
+	end)
+
+	keyBtn.MouseLeave:Connect(function()
+		Util.tween(keyBtn, {BackgroundColor3 = GetTheme().pill})
+	end)
+
+	local arrow = Instance.new("ImageButton")
+	arrow.Name = "DropdownArrow"
+	arrow.Size = UDim2.fromOffset(16, 16)
+	arrow.Position = UDim2.new(1, -20, 0, 8)
+	arrow.AnchorPoint = Vector2.new(1, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Image = "rbxassetid://6031094670"
+	arrow.Rotation = 0
+	arrow.Parent = f
+
+	self.Arrow = arrow
+
+	local drop = Instance.new("Frame")
+	drop.Name = "Dropdown"
+	drop.BackgroundColor3 = GetTheme().bg
+	drop.BorderSizePixel = 0
+	drop.Position = UDim2.new(0, 4, 0, 34)
+	drop.Size = UDim2.new(1, -8, 0, 0)
+	drop.ClipsDescendants = true
+	drop.Parent = f
+	Util.corner(drop, 8)
+
+	local list = Instance.new("UIListLayout")
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, 4)
+	list.Parent = drop
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 4)
+	pad.PaddingBottom = UDim.new(0, 4)
+	pad.PaddingLeft = UDim.new(0, 4)
+	pad.PaddingRight = UDim.new(0, 4)
+	pad.Parent = drop
+
+	self.Dropdown = drop
+	self.DropdownOpen = false
+
+	arrow.MouseButton1Click:Connect(function()
+		self.DropdownOpen = not self.DropdownOpen
+		drop.Visible = self.DropdownOpen
+
+		Util.tween(arrow, {
+			Rotation = self.DropdownOpen and -90 or 0
+		}, 0.15)
+
+		local layout = list.AbsoluteContentSize.Y
+		local targetHeight = self.DropdownOpen and layout or 0
+
+		Util.tween(drop, {
+			Size = UDim2.new(1, -8, 0, targetHeight + 8)
+		}, 0.15)
+
+		Util.tween(f, {
+			Size = UDim2.new(1, 0, 0, 34 + targetHeight + 12)
+		}, 0.15)
+
+		task.defer(function()
+			window:_updateColumnSize()
+		end)
+	end)
+
+	local capturing = false
+
+	-- user clicks the keybind button → begin capture
+	keyBtn.MouseButton1Click:Connect(function()
+		capturing = true
+		keyBtn.Text = "..."
+	end)
+
+	-- user presses a key → set new keybind
+	UIS.InputBegan:Connect(function(input)
+		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
+			capturing = false
+			self.CurrentKey = input.KeyCode
+			keyBtn.Text = input.KeyCode.Name
+			return
+		end
+
+		if not capturing and input.KeyCode == self.CurrentKey then
+			cb(self.CurrentKey)
+		end
+	end)
+
+	function self:_updateArrowVisibility()
+		local count = #drop:GetChildren()
+		self.Arrow.Visible = count > 3
+	end
+
+	self:_updateArrowVisibility()
+
+	self.Frame = f
+	return self
+end
+
+function Column:AddKeybind(data:KeybindData)
+	return Keybind.new(self.Window, self.Frame, data)
+end
+
+-- \\ Options
 function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	local self = setmetatable({}, Option)
 
@@ -1336,7 +1658,7 @@ function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	return self
 end
 
--- \\ Module Export
+-- // Module Export
 local RebornUI = {
 	Window = Window,
 	Column = Column,
@@ -1346,6 +1668,7 @@ local RebornUI = {
 	Pill = Pill,
 	PlayerList = PlayerList,
 	MiniButton = MiniButton,
+	Keybind = Keybind,
 	Option = Option,
 
 	Themes = Themes,
