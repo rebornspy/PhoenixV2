@@ -169,7 +169,7 @@ export type WindowData = {
 }
 
 function Window.new(data: WindowData): WindowType
-	 	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
+	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
 		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
 		holder:Destroy()
 	end
