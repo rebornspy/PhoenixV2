@@ -1500,7 +1500,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	keyBtn.Size = UDim2.fromOffset(30, 22)
 	keyBtn.Position = UDim2.new(1, -40, 0.5, -11)
 	keyBtn.BackgroundColor3 = GetTheme().pill
-	keyBtn.Text = defaultKey.Name
+	keyBtn.Text = tostring(defaultKey)
 	keyBtn.Font = Enum.Font.GothamBold
 	keyBtn.TextSize = 12
 	keyBtn.TextColor3 = GetTheme().text
