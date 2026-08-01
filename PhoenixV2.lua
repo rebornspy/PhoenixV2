@@ -1485,7 +1485,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "Text"
-	lbl.Size = UDim2.new(1, -60, 1, 0)
+	lbl.Size = UDim2.new(1, -60, 0, 34)
 	lbl.Position = UDim2.fromOffset(10, 0)
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.GothamMedium
@@ -1498,7 +1498,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	local keyBtn = Instance.new("TextButton")
 	keyBtn.Name = "KeyButton"
 	keyBtn.Size = UDim2.fromOffset(30, 22)
-	keyBtn.Position = UDim2.new(1, -40, 0.5, -11)
+	keyBtn.Position = UDim2.new(1, -40, 0, 6)
 	keyBtn.BackgroundColor3 = GetTheme().pill
 	keyBtn.Text = tostring(defaultKey)
 	keyBtn.Font = Enum.Font.GothamBold
@@ -1519,7 +1519,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	local arrow = Instance.new("ImageButton")
 	arrow.Name = "DropdownArrow"
 	arrow.Size = UDim2.fromOffset(16, 16)
-	arrow.Position = UDim2.new(1, -20, 0, 8)
+	arrow.Position = UDim2.new(1, -50, 0, 8)
 	arrow.AnchorPoint = Vector2.new(1, 0)
 	arrow.BackgroundTransparency = 1
 	arrow.Image = "rbxassetid://6031094670"
@@ -1572,7 +1572,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 			Size = UDim2.new(1, 0, 0, 34 + targetHeight + 12)
 		}, 0.15)
 
-		task.defer(function()
+		task.delay(0.1, function()
 			window:_updateColumnSize()
 		end)
 	end)
