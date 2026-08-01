@@ -1616,7 +1616,8 @@ end
 
 function Keybind:DisconnectKey()
 	if self.Connection then
-		self.Connection:Disconnect
+		self.Connection:Disconnect()
+		self.Connection = nil
 	end
 end
 
