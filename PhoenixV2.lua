@@ -1438,7 +1438,7 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
--- // s
+-- // Keybinds
 export type KeybindType = {
 	Frame: Frame,
 	Arrow: ImageButton,
