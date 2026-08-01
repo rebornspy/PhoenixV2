@@ -165,7 +165,7 @@ export type WindowType = {
 export type WindowData = {
 	Name: string;
 	Icon: string;
-	CloseKeybind: Enum.KeyCode;
+	Close: Enum.KeyCode;
 }
 
 function Window.new(data: WindowData): WindowType
@@ -176,7 +176,7 @@ function Window.new(data: WindowData): WindowType
 	
 	local title = data.Name or "Window"
 	local icon = data.Icon or "zap"
-	local closeKeybind = data.CloseKeybind or Enum.KeyCode.RightShift
+	local close = data.Close or Enum.KeyCode.RightShift
 
 	local self = setmetatable({}, Window) :: WindowType
 
@@ -309,7 +309,7 @@ function Window.new(data: WindowData): WindowType
 	end)
 	
 	UIS.InputBegan:Connect(function(input)
-		if input.KeyCode == closeKeybind then
+		if input.KeyCode == close then
 			if self.Visible then
 				self:ToggleUi(false)
 				self.Visible = false
@@ -1438,7 +1438,7 @@ function PlayerList:AddMiniButton(cfg: MiniButtonConfig)
 	end
 end
 
--- // Keybinds
+-- // s
 export type KeybindType = {
 	Frame: Frame,
 	Arrow: ImageButton,
@@ -1579,13 +1579,11 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 
 	local capturing = false
 
-	-- user clicks the keybind button → begin capture
 	keyBtn.MouseButton1Click:Connect(function()
 		capturing = true
 		keyBtn.Text = "..."
 	end)
 
-	-- user presses a key → set new keybind
 	UIS.InputBegan:Connect(function(input)
 		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
 			capturing = false
@@ -1608,6 +1606,39 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 
 	self.Frame = f
 	return self
+end
+
+function Keybind:AddOption(data)
+	local style = data.Style
+	if not style then
+		warn("Toggle:AddComponent missing Style")
+		return
+	end
+
+	local class: any = ComponentFactory[style]
+	if not class then
+		warn("Unknown component style:", style)
+		return
+	end
+
+	local newComponent: any = class.new(self.Window, self.Dropdown, data)
+	local dropdown = self.Dropdown :: Frame
+
+	if self.DropdownOpen then
+		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local newHeight = dropdownLayout.AbsoluteContentSize.Y
+		Util.tween(self.Dropdown, {
+			Size = UDim2.new(1, 0, 0, newHeight)
+		}, 0.15)
+	end
+
+	self:_updateArrowVisibility()
+
+	task.defer(function()
+		self.Window:_updateColumnSize()
+	end)
+
+	return newComponent
 end
 
 function Column:AddKeybind(data:KeybindData)
