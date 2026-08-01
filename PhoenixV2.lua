@@ -1565,11 +1565,11 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 		local targetHeight = self.DropdownOpen and layout or 0
 
 		Util.tween(drop, {
-			Size = UDim2.new(1, -8, 0, targetHeight + 8)
+			Size = UDim2.new(1, -8, 0, targetHeight + (self.DropdownOpen and 8 or 0))
 		}, 0.15)
 
 		Util.tween(f, {
-			Size = UDim2.new(1, 0, 0, 34 + targetHeight + 12)
+			Size = UDim2.new(1, 0, 0, 34 + targetHeight + (self.DropdownOpen and 12 or 4))
 		}, 0.15)
 
 		task.delay(0.1, function()
