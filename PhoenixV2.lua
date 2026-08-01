@@ -1446,6 +1446,7 @@ export type KeybindType = {
 	DropdownOpen: boolean,
 	Window: WindowType,
 	CurrentKey: Enum.KeyCode,
+	Connection: RBXScriptConnection,
 	_updateArrowVisibility: (self: KeybindType) -> (),
 }
 
@@ -1584,7 +1585,10 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 		keyBtn.Text = "..."
 	end)
 
-	UIS.InputBegan:Connect(function(input)
+	local uisConn
+	uisConn = UIS.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		
 		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
 			capturing = false
 			self.CurrentKey = input.KeyCode
@@ -1597,6 +1601,8 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 		end
 	end)
 
+	self.Connection = uisConn
+
 	function self:_updateArrowVisibility()
 		local count = #drop:GetChildren()
 		self.Arrow.Visible = count > 3
@@ -1606,6 +1612,12 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 
 	self.Frame = f
 	return self
+end
+
+function Keybind:Disconnect()
+	if self.Connection then
+		self.Connection:Disconnect
+	end
 end
 
 function Keybind:AddOption(data)
