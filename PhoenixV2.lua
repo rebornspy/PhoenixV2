@@ -1614,7 +1614,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	return self
 end
 
-function Keybind:Disconnect()
+function Keybind:DisconnectKey()
 	if self.Connection then
 		self.Connection:Disconnect
 	end
