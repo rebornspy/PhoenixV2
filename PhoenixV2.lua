@@ -9,6 +9,16 @@ local ts: TweenService = game:GetService("TweenService") :: TweenService
 
 local LP: Player = Players.LocalPlayer :: Player
 
+_G.conns = _G.conns or {}
+_G.cleanup = function()
+	for _, conn: RBXScriptConnection in ipairs(_G.conns) do
+		if conn and conn.Disconnect then
+			conn:Disconnect()
+		end
+	end
+	table.clear(_G.conns)
+end
+
 -- // Themes
 local Themes = {
 	Dark = {
@@ -76,12 +86,21 @@ function Util.stroke(p: Instance, col: Color3, t: number?, tr: number?)
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 end
 
-function Util.tween(obj: Instance, props: {[string]: any}, time: number?)
-	ts:Create(
+function Util.tween(obj: Instance, info: TweenInfo, props: {[string]: any})
+	return ts:Create(
 		obj,
-		TweenInfo.new(time or 0.12),
+		info,
 		props
-	)   :Play()
+	)
+end
+
+function Util.isValidKeyCode(keyOrString: string)
+	for _, key in Enum.KeyCode:GetEnumItems() do
+		if key.Name == keyOrString then
+			return true
+		end
+	end
+	return false
 end
 
 -- // Icons
@@ -153,7 +172,7 @@ export type WindowType = {
 	Minimized: boolean;
 	PrevSize: UDim2;
 	NumberOfColumns: number;
-	
+
 	_makeResizable: (self: WindowType, handle: Frame) -> ();
 	_updateColumnSize: (self: WindowType) -> ();
 	RefreshTheme: (self: WindowType) -> ();
@@ -165,18 +184,38 @@ export type WindowType = {
 export type WindowData = {
 	Name: string;
 	Icon: string;
-	Close: Enum.KeyCode;
+	CloseKeybind: Enum.KeyCode;
 }
 
 function Window.new(data: WindowData): WindowType
+	if _G.cleanup then
+		_G.cleanup()
+	end
+	
 	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
 		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
 		holder:Destroy()
 	end
-	
+
 	local title = data.Name or "Window"
 	local icon = data.Icon or "zap"
-	local close = data.Close or Enum.KeyCode.RightShift
+	local close
+	
+	if typeof(data.CloseKeybind) == "string" then
+		if Util.isValidKeyCode(data.CloseKeybind) then
+			close = Enum.KeyCode[data.CloseKeybind]
+		else
+			close = Enum.KeyCode.RightShift
+			warn(`Window: "{data.CloseKeybind}" is not a valid KeyCode, ask the script creator to change it! \nAs to not error, the keybind for hiding the UI is now RightShift.`)
+		end
+
+	elseif typeof(data.CloseKeybind) == "EnumItem" then
+		close = data.CloseKeybind
+
+	else
+		close = Enum.KeyCode.RightShift
+		warn(`Window: {data.CloseKeybind} is not a valid EnumItem or KeyCode, ask the script creator to change it! \nAs to not error, the keybind for hiding the UI is now RightShift.`)
+	end
 
 	local self = setmetatable({}, Window) :: WindowType
 
@@ -185,7 +224,7 @@ function Window.new(data: WindowData): WindowType
 		local dragStart: Vector3
 		local startPos: UDim2
 
-		topbar.InputBegan:Connect(function(input)
+		_G.conns["InputBegan1"] = topbar.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				dragging = true
 				dragStart = input.Position
@@ -193,7 +232,7 @@ function Window.new(data: WindowData): WindowType
 			end
 		end)
 
-		UIS.InputChanged:Connect(function(input)
+		_G.conns["InputChanged1"] = UIS.InputChanged:Connect(function(input)
 			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 				local delta = input.Position - dragStart
 				self.Main.Position = UDim2.new(
@@ -205,7 +244,7 @@ function Window.new(data: WindowData): WindowType
 			end
 		end)
 
-		UIS.InputEnded:Connect(function(input)
+		_G.conns["InputEnded1"] = UIS.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				dragging = false
 			end
@@ -240,7 +279,7 @@ function Window.new(data: WindowData): WindowType
 	header.BackgroundColor3 = GetTheme().header
 	header.Parent = main
 	Util.corner(header, 12)
-	
+
 	self.Header = header
 
 	Icon(header, icon, 16, GetTheme().blue).Position = UDim2.fromOffset(16, 14)
@@ -249,7 +288,7 @@ function Window.new(data: WindowData): WindowType
 	label.Size = UDim2.new(0.5, 0, 1, 0)
 	label.Position = UDim2.fromOffset(40, 0)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
+	label.Font = Enum.Font.Michroma
 	label.Text = title
 	label.TextColor3 = GetTheme().text
 	label.TextSize = 14
@@ -287,9 +326,9 @@ function Window.new(data: WindowData): WindowType
 	self.Body = body
 	self.Visible = true
 	self.Minimized = false
-	
+
 	self.PrevSize = self.Main.Size
-	
+
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "Close"
 	closeButton.Size = UDim2.new(0, 24, 0, 24)
@@ -299,16 +338,16 @@ function Window.new(data: WindowData): WindowType
 	closeButton.Text = "x"
 	closeButton.TextColor3 = GetTheme().text
 	closeButton.TextSize = 14
-	closeButton.Font = Enum.Font.GothamBold
+	closeButton.Font = Enum.Font.Michroma
 	closeButton.Parent = header
 	Util.corner(closeButton, 6)
-	
-	closeButton.MouseButton1Click:Connect(function()
+
+	_G.conns["MouseButton1Click1"] = closeButton.MouseButton1Click:Connect(function()
 		self:ToggleUi(false)
 		self.Visible = false
 	end)
-	
-	UIS.InputBegan:Connect(function(input)
+
+	_G.conns["InputBegan2"] = UIS.InputBegan:Connect(function(input)
 		if input.KeyCode == close then
 			if self.Visible then
 				self:ToggleUi(false)
@@ -319,7 +358,7 @@ function Window.new(data: WindowData): WindowType
 			end
 		end
 	end)
-	
+
 	local minimizeButton = Instance.new("TextButton")
 	minimizeButton.Name = "Minimize"
 	minimizeButton.Size = UDim2.new(0, 24, 0, 24)
@@ -329,31 +368,31 @@ function Window.new(data: WindowData): WindowType
 	minimizeButton.Text = "-"
 	minimizeButton.TextColor3 = GetTheme().text
 	minimizeButton.TextSize = 16
-	minimizeButton.Font = Enum.Font.GothamBold
+	minimizeButton.Font = Enum.Font.Michroma
 	minimizeButton.Parent = header
 	Util.corner(minimizeButton, 6)
-	
-	minimizeButton.MouseButton1Click:Connect(function()
+
+	_G.conns["MouseButton1Click2"] = minimizeButton.MouseButton1Click:Connect(function()
 		if self.Minimized then
 			self:Minimize(false)
-			
-			Util.tween(minimizeButton,
-				{Rotation = 0},
-				0.25
-			)
-			
-			task.delay(0.125, function()
+
+			local tween = Util.tween(minimizeButton, TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+				Rotation = 0
+			})
+			tween:Play()
+
+			_G.conns["TweenCompleted1"] = tween.Completed:Connect(function()
 				minimizeButton.Text = "-"
 			end)
 		else
 			self:Minimize(true)
-			
-			Util.tween(minimizeButton,
-				{Rotation = 90},
-				0.25
-			)
 
-			task.delay(0.125, function()
+			local tween = Util.tween(minimizeButton, TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+				Rotation = 90
+			})
+			tween:Play()
+
+			_G.conns["TweenCompleted2"] = tween.Completed:Connect(function()
 				minimizeButton.Text = "+"
 			end)
 		end
@@ -361,14 +400,12 @@ function Window.new(data: WindowData): WindowType
 
 	self:_makeResizable(handle)
 
-	main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	_G.conns["GetPropertyChangedSignal1"] = main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		self:_updateColumnSize()
 	end)
 
-	task.delay(0.5, function()
-		self:_updateColumnSize()
-	end)
-	
+	self:_updateColumnSize()
+
 	self.NumberOfColumns = 0
 
 	return self
@@ -379,7 +416,7 @@ function Window:_makeResizable(handle: Frame)
 	local startPos: Vector2
 	local startSize: Vector2
 
-	handle.InputBegan:Connect(function(input)
+	_G.conns["InputBegan3"] = handle.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			resizing = true
 			startPos = UIS:GetMouseLocation()
@@ -387,7 +424,7 @@ function Window:_makeResizable(handle: Frame)
 		end
 	end)
 
-	UIS.InputChanged:Connect(function(input)
+	_G.conns["InputChanged2"] = UIS.InputChanged:Connect(function(input)
 		if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
 			local delta = UIS:GetMouseLocation() - startPos
 			local newW = math.clamp(startSize.X + delta.X, 300, 2000)
@@ -398,7 +435,7 @@ function Window:_makeResizable(handle: Frame)
 		end
 	end)
 
-	UIS.InputEnded:Connect(function(input)
+	_G.conns["InputEnded2"] = UIS.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			resizing = false
 		end
@@ -407,47 +444,40 @@ end
 
 function Window:_updateColumnSize()
 	local columns = {}
-	for _, child: any in ipairs(self.Body:GetChildren()) do
+	for _, child in ipairs(self.Body:GetChildren()) do
 		if child:IsA("Frame") then
 			table.insert(columns, child)
 		end
 	end
 
-	local count = #columns
-	if count == 0 then return end
+	if #columns == 0 then return end
 
-	local bodyWidth: number = self.Body.AbsoluteSize.X
+	local bodyWidth = self.Body.AbsoluteSize.X
 	local padding = 8
 	local minColWidth = 175
 
 	local maxCols = math.max(1, math.floor((bodyWidth - padding) / (minColWidth + padding)))
-	local colsPerRow = math.clamp(maxCols, 1, count)
+	local colsPerRow = math.clamp(maxCols, 1, #columns)
 	local colWidth = (bodyWidth - padding * (colsPerRow + 1)) / colsPerRow
 
-	for _, col: any in ipairs(columns) do
+	for _, col in ipairs(columns) do
 		col.Size = UDim2.new(0, colWidth, col.Size.Y.Scale, col.Size.Y.Offset)
-	end
-
-	task.wait()
-
-	local function getColumnContentHeight(col: Frame)
-		local layout = col:FindFirstChildOfClass("UIListLayout")
-		if layout then
-			return layout.AbsoluteContentSize.Y + 20
-		end
-
-		local h = 0
-		for _, c in ipairs(col:GetChildren()) do
-			if c:IsA("GuiObject") then
-				h += c.AbsoluteSize.Y
-			end
-		end
-		return h + 20
 	end
 
 	local colHeights = {}
 	for _, col in ipairs(columns) do
-		colHeights[col] = getColumnContentHeight(col)
+		local layout = col:FindFirstChildOfClass("UIListLayout")
+		if layout then
+			colHeights[col] = layout.AbsoluteContentSize.Y + 20
+		else
+			local h = 0
+			for _, c in ipairs(col:GetChildren()) do
+				if c:IsA("GuiObject") then
+					h += c.AbsoluteSize.Y
+				end
+			end
+			colHeights[col] = h + 20
+		end
 	end
 
 	local colY = table.create(colsPerRow, padding)
@@ -458,13 +488,13 @@ function Window:_updateColumnSize()
 		local h = colHeights[col]
 		local y = colY[slot]
 
-		Util.tween(col, {
+		Util.tween(col, TweenInfo.new(0.12, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
 			Size = UDim2.new(0, colWidth, 0, h)
-		}, 0.15)
+		}):Play()
 
-		Util.tween(col, {
+		Util.tween(col, TweenInfo.new(0.12, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
 			Position = UDim2.new(0, x, 0, y)
-		}, 0.15)
+		}):Play()
 
 		colY[slot] += h + padding
 	end
@@ -493,27 +523,27 @@ function Window:Minimize(minimized)
 		self.Minimized = true
 		local handle = self.Main:FindFirstChild("ResizeHandle")
 		if handle then handle.Visible = false end
-		
+
 		self.PrevSize = self.Main.Size
 		local targetXOffset = self.Main.Size.X.Offset - (self.Main.Size.X.Offset*(4/7))
-		
+
 		if targetXOffset < 250 then
 			targetXOffset = 250
 		end
 
-		Util.tween(self.Main, {
+		Util.tween(self.Main, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
 			Size = UDim2.new(self.Main.Size.X.Scale, targetXOffset, 0, self.Header.Size.Y.Offset)
-		}, 0.15)
+		}):Play()
 	else
 		self.Body.Visible = true
 		self.Minimized = false
 		local handle = self.Main:FindFirstChild("ResizeHandle")
 		if handle then handle.Visible = true end
-		
+
 		if self.PrevSize then
-			Util.tween(self.Main, {
+			Util.tween(self.Main, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
 				Size = self.PrevSize
-			}, 0.15)
+			}):Play()
 		end
 	end
 end
@@ -532,7 +562,7 @@ end
 export type ColumnType = {
 	Frame: Frame;
 	Window: WindowType;
-	
+
 	addSection: (self: ColumnType, data: SectionData) -> SectionType;
 	addToggle: (self: ColumnType, data: ToggleData) -> ToggleType;
 	addSlider: (self: ColumnType, data: SliderData) -> SliderType;
@@ -561,7 +591,7 @@ function Column.new(parent: Instance, window: WindowType): ColumnType
 
 	local pad = Instance.new("UIPadding")
 	pad.PaddingTop = UDim.new(0, 8)
-	pad.PaddingBottom = UDim.new(0, 10)
+	pad.PaddingBottom = UDim.new(0, 8)
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
 	pad.Parent = col
@@ -572,7 +602,7 @@ function Column.new(parent: Instance, window: WindowType): ColumnType
 	layout.Parent = col
 
 	self.Frame = col
-	
+
 	self.Window.NumberOfColumns += 1
 
 	return self
@@ -647,13 +677,13 @@ function Section.new(parent: Instance, data: SectionData): SectionType
 	label.Size = UDim2.new(1, -xo, 0, 14)
 	label.Position = UDim2.new(0, xo, 1, -14)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
+	label.Font = Enum.Font.Michroma
 	label.Text = string.upper(name)
 	label.TextColor3 = GetTheme().faint
 	label.TextSize = 11
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = frame
-	
+
 	self.label = label
 
 	self.Frame = frame
@@ -693,6 +723,8 @@ export type ToggleData = {
 	LayoutOrder: number?,
 }
 
+local RunService = game:GetService("RunService")
+
 function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): ToggleType
 	local name: string = data.Name or "Toggle"
 	local default: boolean = data.Default or false
@@ -711,12 +743,16 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	f.Parent = parent
 	Util.corner(f, 6)
 
-	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+	_G.conns["MouseEnter1"] = f.MouseEnter:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().hover
+		}):Play()
 	end)
 
-	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
+	_G.conns["MouseLeave1"] = f.MouseLeave:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().colbg
+		}):Play()
 	end)
 
 	local lbl = Instance.new("TextLabel")
@@ -724,7 +760,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	lbl.Size = UDim2.new(1, -54, 0, 0)
 	lbl.Position = UDim2.fromOffset(10, 17)
 	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
+	lbl.Font = Enum.Font.Michroma
 	lbl.Text = name
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
@@ -752,30 +788,17 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 
 	local state = default
 
-	f.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			state = not state
-
-			Util.tween(sw, {BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff}, 0.15)
-			Util.tween(knob, {
-				Position = state
-					and UDim2.new(1, -16, 0.5, -7)
-					or UDim2.new(0, 2, 0.5, -7)
-			}, 0.15)
-
-			cb(state)
-		end
-	end)
-	
-	sw.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click3"] = sw.MouseButton1Click:Connect(function()
 		state = not state
 
-		Util.tween(sw, {BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff}, 0.15)
-		Util.tween(knob, {
+		Util.tween(sw, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			BackgroundColor3 = state and GetTheme().blue or GetTheme().trackOff
+		}):Play()
+		Util.tween(knob, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Position = state
 				and UDim2.new(1, -16, 0.5, -7)
 				or UDim2.new(0, 2, 0.5, -7)
-		}, 0.15)
+		}):Play()
 
 		cb(state)
 	end)
@@ -819,33 +842,38 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	self.Dropdown = drop
 	self.DropdownOpen = false
 
-	self.Arrow.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click4"] = self.Arrow.MouseButton1Click:Connect(function()
 		self.DropdownOpen = not self.DropdownOpen
-		self.Dropdown.Visible = self.DropdownOpen
+		self.Dropdown.Visible = true
 
-		Util.tween(self.Arrow, {
+		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Rotation = self.DropdownOpen and -90 or 0
-		}, 0.15)
+		}):Play()
 
 		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
-		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
+		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
 
-		Util.tween(self.Dropdown, {
-			Size = UDim2.new(1, -8, 0, targetHeight + 8)
-		}, 0.15)
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, -8, 0, targetHeight)
+		}):Play()
 
-		local baseHeight = 34
-		if self.DropdownOpen then
-			Util.tween(self.Frame, {
-				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 12)
-			}, 0.15)
-		else
-			Util.tween(self.Frame, {
-				Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
-			}, 0.15)
-		end
-
-		task.delay(0.1, function()
+		local baseHeight = self.DropdownOpen and 38 or 34
+		
+		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
+		})
+		tween:Play()
+		
+		local startColSize = parent.Size
+		local baseColHeight = startColSize.Y.Offset
+		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
+		}):Play()
+		
+		_G.conns["TweenCompleted3"] = tween.Completed:Connect(function()
+			if not self.DropdownOpen then
+				self.Dropdown.Visible = false
+			end
 			self.Window:_updateColumnSize()
 		end)
 	end)
@@ -854,7 +882,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
-	
+
 	self._updateArrowVisibility()
 	self.Frame = f
 	return self
@@ -879,9 +907,9 @@ function Toggle:AddOption(data)
 	if self.DropdownOpen then
 		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
 		local newHeight = dropdownLayout.AbsoluteContentSize.Y
-		Util.tween(self.Dropdown, {
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Size = UDim2.new(1, 0, 0, newHeight)
-		}, 0.15)
+		}):Play()
 	end
 
 	self:_updateArrowVisibility()
@@ -917,6 +945,7 @@ export type SliderType = {
 	_min: number,
 	_max: number,
 	_snap: number,
+	_lastVal: number,
 	_cb: (number) -> (),
 
 	_fill: Frame,
@@ -925,6 +954,7 @@ export type SliderType = {
 	_val: TextLabel,
 
 	_updateArrowVisibility: () -> (),
+	SetValue: (self: SliderType, v: number) -> (),
 	AddOption: (self: SliderType, data: SliderData) -> (),
 }
 
@@ -944,6 +974,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	self._max = max
 	self._snap = snap
 	self._cb = cb
+	self._lastVal = default
 
 	local f = Instance.new("Frame")
 	f.Name = name
@@ -954,40 +985,44 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	f.Parent = parent
 	Util.corner(f, 6)
 
-	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+	_G.conns["MouseEnter2"] = f.MouseEnter:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().hover
+		}):Play()
 	end)
 
-	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
+	_G.conns["MouseLeave2"] = f.MouseLeave:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().colbg
+		}):Play()
 	end)
-
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "Text"
 	lbl.Size = UDim2.new(1, -20, 0, 18)
 	lbl.Position = UDim2.fromOffset(10, 7)
 	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
+	lbl.Font = Enum.Font.Michroma
 	lbl.Text = name
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.Parent = f
 
-	local val = Instance.new("TextLabel")
+	local val = Instance.new("TextBox")
 	val.Name = "Value"
 	val.AutomaticSize = Enum.AutomaticSize.X
 	val.AnchorPoint = Vector2.new(1, 0)
 	val.Size = UDim2.fromOffset(0, 18)
 	val.Position = UDim2.new(1, -8, 0, 7)
 	val.BackgroundTransparency = 1
-	val.Font = Enum.Font.GothamBold
+	val.Font = Enum.Font.Michroma
 	val.Text = tostring(default)
 	val.TextColor3 = GetTheme().text
 	val.TextSize = 13
 	val.TextXAlignment = Enum.TextXAlignment.Right
 	val.Parent = f
+	val.ClearTextOnFocus = false
 
 	local bar = Instance.new("Frame")
 	bar.Name = "Bar"
@@ -1039,27 +1074,38 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	self.Dropdown = drop
 	self.DropdownOpen = false
 
-	self.Arrow.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click5"] = self.Arrow.MouseButton1Click:Connect(function()
 		self.DropdownOpen = not self.DropdownOpen
-		self.Dropdown.Visible = self.DropdownOpen
+		self.Dropdown.Visible = true
 
-		Util.tween(self.Arrow, {
+		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Rotation = self.DropdownOpen and -90 or 0
-		}, 0.15)
+		}):Play()
 
 		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
-		local targetHeight = self.DropdownOpen and layout.AbsoluteContentSize.Y or 0
+		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
 
-		Util.tween(self.Dropdown, {
-			Size = UDim2.new(1, -8, 0, targetHeight + 8)
-		}, 0.15)
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, -8, 0, targetHeight)
+		}):Play()
 
-		local baseHeight = 34
-		Util.tween(self.Frame, {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight + 18)
-		}, 0.15)
+		local baseHeight = self.DropdownOpen and 44 or 46
 
-		task.delay(0.1, function()
+		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
+		})
+		tween:Play()
+
+		local startColSize = parent.Size
+		local baseColHeight = startColSize.Y.Offset
+		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
+		}):Play()
+
+		_G.conns["TweenCompleted5"] = tween.Completed:Connect(function()
+			if not self.DropdownOpen then
+				self.Dropdown.Visible = false
+			end
 			self.Window:_updateColumnSize()
 		end)
 	end)
@@ -1068,12 +1114,12 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
 	end
-	
+
 	function self:_updateArrowPosition()
 		local valWidth = val.AbsoluteSize.X
 		arrow.Position = UDim2.new(1, -(valWidth + 18), 0, 8)
 	end
-	
+
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
 	fill.Size = UDim2.new(rel, 0, 1, 0)
@@ -1109,16 +1155,23 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		v = math.clamp(v, min, max)
 		local sr = (v - min) / (max - min)
 
-		fill.Size = UDim2.new(sr, 0, 1, 0)
-		knob.Position = UDim2.new(sr, 0, 0.5, 0)
-		val.Text = tostring(v)
+		Util.tween(fill, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(sr, 0, 1, 0)
+		}):Play()
 		
+		Util.tween(knob, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.new(sr, 0, 0.5, 0)
+		}):Play()
+
+		val.Text = tostring(v)
+		self._lastVal = v
+
 		self:_updateArrowPosition()
 
 		cb(v)
 	end
 
-	bar.InputBegan:Connect(function(i)
+	_G.conns["InputBegan4"] = bar.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
 			local leftSidePos = val.Position.X.Offset - (val.AnchorPoint.X * val.AbsoluteSize.X)
 			dragging = true
@@ -1126,21 +1179,42 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		end
 	end)
 
-	knob.InputBegan:Connect(function(i)
+	_G.conns["InputBegan5"] = knob.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
 		end
 	end)
 
-	UIS.InputEnded:Connect(function(i)
+	_G.conns["InputEnded3"] = UIS.InputEnded:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = false
 		end
 	end)
 
-	UIS.InputChanged:Connect(function(i)
+	_G.conns["InputChanged3"] = UIS.InputChanged:Connect(function(i)
 		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
 			setX(i.Position.X)
+		end
+	end)
+
+	_G.conns["Focused1"] = val.Focused:Connect(function()
+		val:CaptureFocus()
+		val.CursorPosition = #val.Text + 1
+		val.SelectionStart = 1
+	end)
+	
+	_G.conns["GetPropertyChangedSignal2"] = val:GetPropertyChangedSignal("Text"):Connect(function()
+		self._updateArrowPosition()
+		val.Text = val.Text:gsub("[^%d%-%.]", "")
+	end)
+	
+	_G.conns["FocusLost1"] = val.FocusLost:Connect(function()
+		local v = tonumber(val.Text)
+
+		if v then
+			self:SetValue(v)
+		else
+			val.Text = tostring(self._lastVal)
 		end
 	end)
 
@@ -1161,9 +1235,16 @@ function Slider:SetValue(v: number)
 
 	local sr = (v - min) / (max - min)
 
-	self._fill.Size = UDim2.new(sr, 0, 1, 0)
-	self._knob.Position = UDim2.new(sr, 0, 0.5, 0)
+	Util.tween(self._fill, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.new(sr, 0, 1, 0)
+	}):Play()
+
+	Util.tween(self._knob, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position = UDim2.new(sr, 0, 0.5, 0)
+	}):Play()
+	
 	self._val.Text = tostring(v)
+	self._lastVal = v
 
 	self._cb(v)
 end
@@ -1187,9 +1268,9 @@ function Slider:AddOption(data)
 	if self.DropdownOpen then
 		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
 		local newHeight = dropdownLayout.AbsoluteContentSize.Y
-		Util.tween(self.Dropdown, {
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Size = UDim2.new(1, 0, 0, newHeight)
-		}, 0.15)
+		}):Play()
 	end
 
 	self:_updateArrowVisibility()
@@ -1246,22 +1327,26 @@ function Pill.new(window: WindowType, parent: Instance, data: PillData): PillTyp
 	l.Size = UDim2.new(1, -40, 1, 0)
 	l.Position = UDim2.fromOffset(iconName and 34 or 14, 0)
 	l.BackgroundTransparency = 1
-	l.Font = Enum.Font.GothamMedium
+	l.Font = Enum.Font.Michroma
 	l.Text = name
 	l.TextColor3 = GetTheme().text
 	l.TextSize = 12
 	l.TextXAlignment = Enum.TextXAlignment.Left
 	l.Parent = b
 
-	b.MouseEnter:Connect(function()
-		Util.tween(b, {BackgroundColor3 = GetTheme().pillHover})
+	_G.conns["MouseEnter3"] = b.MouseEnter:Connect(function()
+		Util.tween(b, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().pillHover
+		}):Play()
 	end)
 
-	b.MouseLeave:Connect(function()
-		Util.tween(b, {BackgroundColor3 = GetTheme().pill})
+	_G.conns["MouseLeave3"] = b.MouseLeave:Connect(function()
+		Util.tween(b, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().pill
+		}):Play()
 	end)
 
-	b.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click6"] = b.MouseButton1Click:Connect(function()
 		cb()
 	end)
 
@@ -1334,11 +1419,11 @@ function PlayerList.new(window: WindowType, parent: Instance, table: {}?): Playe
 
 	self:_refresh()
 
-	Players.PlayerAdded:Connect(function()
+	_G.conns["PlayerAdded1"] = Players.PlayerAdded:Connect(function()
 		self:_refresh()
 	end)
 
-	Players.PlayerRemoving:Connect(function()
+	_G.conns["PlayerRemoving1"] = Players.PlayerRemoving:Connect(function()
 		self:_refresh()
 	end)
 
@@ -1366,19 +1451,23 @@ function PlayerList:_refresh()
 
 			self.Plrs[plr] = row
 
-			row.MouseEnter:Connect(function()
-				Util.tween(row, {BackgroundTransparency = 0})
+			_G.conns["MouseEnter4"] = row.MouseEnter:Connect(function()
+				Util.tween(row, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+					BackgroundTransparency = 0
+				}):Play()
 			end)
 
-			row.MouseLeave:Connect(function()
-				Util.tween(row, {BackgroundTransparency = 1})
+			_G.conns["MouseLeave4"] = row.MouseLeave:Connect(function()
+				Util.tween(row, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+					BackgroundTransparency = 1
+				}):Play()
 			end)
 
 			local name = Instance.new("TextLabel")
 			name.Size = UDim2.new(1, -70, 1, 0)
 			name.Position = UDim2.fromOffset(8, 0)
 			name.BackgroundTransparency = 1
-			name.Font = Enum.Font.GothamMedium
+			name.Font = Enum.Font.Michroma
 			name.Text = plr.DisplayName
 			name.TextColor3 = GetTheme().text
 			name.TextSize = 12
@@ -1404,7 +1493,7 @@ function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 	b.Position = UDim2.new(1, cfg.XOffset, 0.5, -11)
 	b.BackgroundColor3 = GetTheme().pill
 	b.Text = cfg.Text
-	b.Font = Enum.Font.GothamMedium
+	b.Font = Enum.Font.Michroma
 	b.TextSize = 10
 	b.TextColor3 = GetTheme().text
 	b.AutoButtonColor = true
@@ -1413,15 +1502,19 @@ function MiniButton.new(parent: Instance, plr: Player, cfg: MiniButtonConfig)
 	Util.corner(b, 5)
 	Util.stroke(b, GetTheme().pillBrd, 0.3)
 
-	b.MouseEnter:Connect(function()
-		Util.tween(b, {BackgroundColor3 = GetTheme().hover})
+	_G.conns["MouseEnter5"] = b.MouseEnter:Connect(function()
+		Util.tween(b, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().hover
+		}):Play()
 	end)
 
-	b.MouseLeave:Connect(function()
-		Util.tween(b, {BackgroundColor3 = GetTheme().pill})
+	_G.conns["MouseLeave5"] = b.MouseLeave:Connect(function()
+		Util.tween(b, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().pill
+		}):Play()
 	end)
 
-	b.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click7"] = b.MouseButton1Click:Connect(function()
 		cfg.Callback(plr)
 	end)
 
@@ -1452,7 +1545,7 @@ export type KeybindType = {
 
 export type KeybindData = {
 	Name: string,
-	Keybind: Enum.KeyCode,
+	Keybind: Enum.KeyCode | string,
 	LayoutOrder: number?,
 	Callback: (Enum.KeyCode) -> (),
 }
@@ -1460,8 +1553,24 @@ export type KeybindData = {
 function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): KeybindType
 	local name = data.Name or "Keybind"
 	local layoutOrder = data.LayoutOrder or 1
-	local defaultKey = data.Keybind or Enum.KeyCode.F
+	local defaultKey
 	local cb = data.Callback or function() end
+	
+	if typeof(data.Keybind) == "string" then
+		if Util.isValidKeyCode(data.Keybind) then
+			defaultKey = Enum.KeyCode[data.Keybind]
+		else
+			defaultKey = Enum.KeyCode.F
+			warn(`{name}: "{data.Keybind}" is not a valid KeyCode, ask the script creator to change it! \nAs to not error, the keybind for this action is now F`)
+		end
+
+	elseif typeof(data.Keybind) == "EnumItem" then
+		defaultKey = data.Keybind
+
+	else
+		defaultKey = Enum.KeyCode.F
+		warn(`{name}: {data.Keybind} is not a valid EnumItem or KeyCode, ask the script creator to change it! \nAs to not error, the keybind for this action is now F`)
+	end
 
 	local self = setmetatable({}, Keybind) :: KeybindType
 	self.Window = window
@@ -1476,12 +1585,16 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	f.Parent = parent
 	Util.corner(f, 6)
 
-	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().hover})
+	_G.conns["MouseEnter6"] = f.MouseEnter:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().hover
+		}):Play()
 	end)
 
-	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundColor3 = GetTheme().colbg})
+	_G.conns["MouseLeave6"] = f.MouseLeave:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().colbg
+		}):Play()
 	end)
 
 	local lbl = Instance.new("TextLabel")
@@ -1489,7 +1602,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	lbl.Size = UDim2.new(1, -60, 0, 34)
 	lbl.Position = UDim2.fromOffset(10, 0)
 	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
+	lbl.Font = Enum.Font.Michroma
 	lbl.Text = name
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
@@ -1501,20 +1614,24 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	keyBtn.Size = UDim2.fromOffset(30, 22)
 	keyBtn.Position = UDim2.new(1, -40, 0, 6)
 	keyBtn.BackgroundColor3 = GetTheme().pill
-	keyBtn.Text = tostring(defaultKey)
-	keyBtn.Font = Enum.Font.GothamBold
+	keyBtn.Text = defaultKey.Name
+	keyBtn.Font = Enum.Font.Michroma
 	keyBtn.TextSize = 12
 	keyBtn.TextColor3 = GetTheme().text
 	keyBtn.AutoButtonColor = false
 	keyBtn.Parent = f
 	Util.corner(keyBtn, 6)
 
-	keyBtn.MouseEnter:Connect(function()
-		Util.tween(keyBtn, {BackgroundColor3 = GetTheme().pillHover})
+	_G.conns["MouseEnter7"] = keyBtn.MouseEnter:Connect(function()
+		Util.tween(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().pillHover
+		}):Play()
 	end)
 
-	keyBtn.MouseLeave:Connect(function()
-		Util.tween(keyBtn, {BackgroundColor3 = GetTheme().pill})
+	_G.conns["MouseLeave7"] = keyBtn.MouseLeave:Connect(function()
+		Util.tween(keyBtn, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundColor3 = GetTheme().pill
+		}):Play()
 	end)
 
 	local arrow = Instance.new("ImageButton")
@@ -1554,42 +1671,53 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	self.Dropdown = drop
 	self.DropdownOpen = false
 
-	arrow.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click8"] = self.Arrow.MouseButton1Click:Connect(function()
 		self.DropdownOpen = not self.DropdownOpen
-		drop.Visible = self.DropdownOpen
+		self.Dropdown.Visible = true
 
-		Util.tween(arrow, {
+		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Rotation = self.DropdownOpen and -90 or 0
-		}, 0.15)
+		}):Play()
 
-		local layout = list.AbsoluteContentSize.Y
-		local targetHeight = self.DropdownOpen and layout or 0
+		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
 
-		Util.tween(drop, {
-			Size = UDim2.new(1, -8, 0, targetHeight + (self.DropdownOpen and 8 or 0))
-		}, 0.15)
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, -8, 0, targetHeight)
+		}):Play()
 
-		Util.tween(f, {
-			Size = UDim2.new(1, 0, 0, 34 + targetHeight + (self.DropdownOpen and 12 or 4))
-		}, 0.15)
+		local baseHeight = self.DropdownOpen and 38 or 34
 
-		task.delay(0.1, function()
-			window:_updateColumnSize()
+		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
+		})
+		tween:Play()
+
+		local startColSize = parent.Size
+		local baseColHeight = startColSize.Y.Offset
+		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
+		}):Play()
+
+		_G.conns["TweenCompleted4"] = tween.Completed:Connect(function()
+			if not self.DropdownOpen then
+				self.Dropdown.Visible = false
+			end
+			self.Window:_updateColumnSize()
 		end)
 	end)
 
 	local capturing = false
 
-	keyBtn.MouseButton1Click:Connect(function()
+	_G.conns["MouseButton1Click9"] = keyBtn.MouseButton1Click:Connect(function()
 		capturing = true
 		keyBtn.Text = "..."
 	end)
 
-	local uisConn
-	uisConn = UIS.InputBegan:Connect(function(input, gp)
+	_G.conns["InputBegan6"] = UIS.InputBegan:Connect(function(input, gp)
 		if gp then return end
-		
-		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
+
+		if capturing and input.KeyCode then
 			capturing = false
 			self.CurrentKey = input.KeyCode
 			keyBtn.Text = input.KeyCode.Name
@@ -1599,9 +1727,14 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 		if not capturing and input.KeyCode == self.CurrentKey then
 			cb(self.CurrentKey)
 		end
+		
+		if capturing and input.UserInputType == Enum.UserInputType.MouseButton1 then
+			capturing = false
+			keyBtn.Text = self.CurrentKey.Name
+		end
 	end)
 
-	self.Connection = uisConn
+	self.Connection = _G.conns["InputBegan6"]
 
 	function self:_updateArrowVisibility()
 		local count = #drop:GetChildren()
@@ -1640,9 +1773,9 @@ function Keybind:AddOption(data)
 	if self.DropdownOpen then
 		local dropdownLayout = dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
 		local newHeight = dropdownLayout.AbsoluteContentSize.Y
-		Util.tween(self.Dropdown, {
+		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Size = UDim2.new(1, 0, 0, newHeight)
-		}, 0.15)
+		}):Play()
 	end
 
 	self:_updateArrowVisibility()
@@ -1673,26 +1806,30 @@ function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	f.Parent = parentComponent.Frame
 	Util.corner(f, 6)
 
-	f.MouseEnter:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 0})
+	_G.conns["MouseEnter7"] = f.MouseEnter:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 0
+		}):Play()
 	end)
 
-	f.MouseLeave:Connect(function()
-		Util.tween(f, {BackgroundTransparency = 1})
+	_G.conns["MouseLeave7"] = f.MouseLeave:Connect(function()
+		Util.tween(f, TweenInfo.new(0.12, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 1
+		}):Play()
 	end)
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -20, 1, 0)
 	lbl.Position = UDim2.fromOffset(10, 0)
 	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamMedium
+	lbl.Font = Enum.Font.Michroma
 	lbl.Text = name
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.Parent = f
 
-	f.InputBegan:Connect(function(i)
+	_G.conns["InputBegan7"] = f.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
 			cb()
 		end
