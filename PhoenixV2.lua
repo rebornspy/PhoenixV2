@@ -4,6 +4,7 @@
 
 -- \\ Globals & Services
 local Players: Players = game:GetService("Players") :: Players
+local RunService: RunService = game:GetService("RunService") :: RunService
 local UIS: UserInputService = game:GetService("UserInputService") :: UserInputService
 local ts: TweenService = game:GetService("TweenService") :: TweenService
 
@@ -32,7 +33,6 @@ local Themes = {
 		dim = Color3.fromRGB(150, 150, 160);
 		faint = Color3.fromRGB(105, 105, 116);
 		blue = Color3.fromRGB(72, 130, 248);
-		red = Color3.fromRGB(220, 80, 90);
 		trackOff = Color3.fromRGB(58, 58, 66);
 		pill = Color3.fromRGB(33, 33, 40);
 		pillBrd = Color3.fromRGB(54, 54, 62);
@@ -60,13 +60,17 @@ local Util = {}
 
 function Util.GetSafeParent()
 	local parent = nil
-	if gethui() or game:GetService("CoreGui") then
-		if gethui() ~= nil then
-			parent = gethui()
-		elseif game:GetService("CoreGui") then
-			parent = game:GetService("CoreGui")
-		end
+	
+	if RunService:IsStudio() then
+		parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	elseif gethui() then
+		parent = gethui()
+	elseif game:GetService("CoreGui") then
+		parent = game:GetService("CoreGui")
+	else
+		parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	end
+	
 	return parent
 end
 
@@ -168,10 +172,13 @@ export type WindowType = {
 	Gui: ScreenGui;
 	Main: Frame;
 	Body: ScrollingFrame;
+	NotificationHolder: Frame;
 	Visible: boolean;
 	Minimized: boolean;
 	PrevSize: UDim2;
 	NumberOfColumns: number;
+	
+	_notifications: {};
 
 	_makeResizable: (self: WindowType, handle: Frame) -> ();
 	_updateColumnSize: (self: WindowType) -> ();
@@ -179,6 +186,9 @@ export type WindowType = {
 	addColumn: (self: WindowType, order: number) -> ColumnType;
 	Minimize: (self: WindowType, minimized: boolean) -> ();
 	ToggleUi: (self: WindowType, toggled: boolean) -> ();
+	Notify: (self: WindowType, data: NotificationData) -> ();
+	_reorderNotifications: (self: WindowType) -> ();
+	_removeNotification: (self: WindowType, notif: Frame) -> ();
 }
 
 export type WindowData = {
@@ -187,13 +197,21 @@ export type WindowData = {
 	CloseKeybind: Enum.KeyCode;
 }
 
+export type NotificationData = {
+	Title: string;
+	Message: string;
+	Icon: string?;
+	Duration: number?;
+	Type: "info" | "success" | "warning" | "error"?;
+}
+
 function Window.new(data: WindowData): WindowType
 	if _G.cleanup then
 		_G.cleanup()
 	end
 	
-	if gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder") then
-		local holder = gethui():FindFirstChild("holder") or game:GetService("CoreGui"):FindFirstChild("holder")
+	if Util.GetSafeParent():FindFirstChild("holder") then
+		local holder = Util.GetSafeParent():FindFirstChild("holder")
 		holder:Destroy()
 	end
 
@@ -407,6 +425,25 @@ function Window.new(data: WindowData): WindowType
 	self:_updateColumnSize()
 
 	self.NumberOfColumns = 0
+	
+	local notifHolder = Instance.new("Frame")
+	notifHolder.Name = "NotificationHolder"
+	notifHolder.Parent = gui
+	notifHolder.AnchorPoint = Vector2.new(1, 0.5)
+	notifHolder.Position = UDim2.fromScale(1, 0.5)
+	notifHolder.Size = UDim2.new(0, 300, 1, 0)
+	notifHolder.BackgroundTransparency = 1
+	notifHolder.ZIndex = 1000
+	
+	local notifPad = Instance.new("UIPadding")
+	notifPad.PaddingBottom = UDim.new(0, 2)
+	notifPad.PaddingLeft = UDim.new(0, 8)
+	notifPad.PaddingRight = UDim.new(0, 8)
+	notifPad.PaddingTop = UDim.new(0, 0)
+	notifPad.Parent = notifHolder
+	
+	self.NotificationHolder = notifHolder
+	self._notifications = {}
 
 	return self
 end
@@ -556,6 +593,186 @@ function Window:ToggleUi(toggled)
 		self.Main.Visible = false
 		self.Visible = false
 	end
+end
+
+local function getNotifColor(nType)
+	if nType == "error" then
+		return {
+			bg = Color3.fromRGB(181, 40, 45);
+			header = Color3.fromRGB(233, 79, 84);
+			text = Color3.fromRGB(251, 205, 207);
+			faint = Color3.fromRGB(248, 154, 157);
+			icon = Color3.fromRGB(67, 13, 15)
+		}
+	elseif nType == "warning" then
+		return {
+			bg = Color3.fromRGB(182, 140, 20);
+			header = Color3.fromRGB(243, 187, 27);
+			text = Color3.fromRGB(12, 9, 0);
+			faint = Color3.fromRGB(35, 22, 5);
+			icon = Color3.fromRGB(120, 93, 13)
+		}
+	elseif nType == "success" then
+		return {
+			bg = Color3.fromRGB(45, 145, 45);
+			header = Color3.fromRGB(61, 193, 60);
+			text = Color3.fromRGB(206, 239, 206);
+			faint = Color3.fromRGB(157, 224, 157);
+			icon = Color3.fromRGB(30, 97, 30)
+		}
+	else
+		return {
+			bg = GetTheme().bg;
+			header = GetTheme().header;
+			text = GetTheme().text;
+			faint = GetTheme().faint;
+			icon = GetTheme().blue
+		}
+	end
+end
+
+function Window:Notify(data: NotificationData)
+	local title = data.Title
+	local msg = data.Message
+	local icon = data.Icon or ""
+	local duration = data.Duration or 3
+	
+	local notifHolder = self.NotificationHolder or self.Gui:FindFirstChild("NotificationHolder") :: Frame
+	if not notifHolder then
+		error("notification holder missing")
+		return
+	end
+	
+	local colors = getNotifColor(data.Type)
+	
+	local notif = Instance.new("Frame")
+	notif.AnchorPoint = Vector2.new(1, 1)
+	notif.AutomaticSize = Enum.AutomaticSize.Y
+	notif.BackgroundColor3 = colors.bg
+	notif.BorderSizePixel = 0
+	notif.Name = "Notification"
+	notif.Parent = notifHolder
+	notif.Position = UDim2.new(1, 0, 1, 200)
+	notif.Size = UDim2.new(1, 0, 0, 80)
+	notif.ClipsDescendants = true
+	Util.corner(notif, 10)
+	
+	if icon ~= "" then
+		local ic = Icon(notif, icon, 18, colors.icon)
+		ic.Position = UDim2.fromOffset(9, 9)
+	end
+	
+	local titleLable = Instance.new("TextLabel")
+	titleLable.BackgroundColor3 = colors.header
+	titleLable.BackgroundTransparency = 0
+	titleLable.Name = "TitleLabel"
+	titleLable.Parent = notif
+	titleLable.Position = UDim2.fromScale(0, 0)
+	titleLable.Size = UDim2.fromScale(1, 0.36)
+	titleLable.Font = Enum.Font.Michroma
+	titleLable.Text = title
+	titleLable.TextColor3 = colors.text
+	titleLable.TextSize = 14
+	titleLable.TextXAlignment = Enum.TextXAlignment.Left
+	titleLable.TextYAlignment = Enum.TextYAlignment.Center
+	
+	local titleCorner = Instance.new("UICorner")
+	titleCorner.Parent = titleLable
+	titleCorner.BottomLeftRadius = UDim.new(0, 0)
+	titleCorner.BottomRightRadius = UDim.new(0, 0)
+	titleCorner.TopLeftRadius = UDim.new(0, 8)
+	titleCorner.TopRightRadius = UDim.new(0, 8)
+	
+	local titlePadding = Instance.new("UIPadding")
+	titlePadding.Parent = titleLable
+	titlePadding.PaddingBottom = UDim.new(0, 0)
+	titlePadding.PaddingLeft = UDim.new(0, 33)
+	titlePadding.PaddingRight = UDim.new(0, 15)
+	titlePadding.PaddingTop = UDim.new(0, 0)
+	
+	local msgLabel = Instance.new("TextLabel")
+	msgLabel.AutomaticSize = Enum.AutomaticSize.Y
+	msgLabel.BackgroundTransparency = 1
+	msgLabel.Name = "Message"
+	msgLabel.Parent = notif
+	msgLabel.Position = UDim2.fromScale(0, 0.36)
+	msgLabel.Size = UDim2.fromScale(1, 0.64)
+	msgLabel.Font = Enum.Font.Michroma
+	msgLabel.Text = msg
+	msgLabel.TextColor3 = colors.faint
+	msgLabel.TextSize = 12
+	msgLabel.TextWrapped = true
+	msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+	msgLabel.TextYAlignment = Enum.TextYAlignment.Top
+	
+	local msgPad = Instance.new("UIPadding")
+	msgPad.Parent = msgLabel
+	msgPad.PaddingBottom = UDim.new(0, 8)
+	msgPad.PaddingLeft = UDim.new(0, 15)
+	msgPad.PaddingRight = UDim.new(0, 15)
+	msgPad.PaddingTop = UDim.new(0, 8)
+	
+	Util.tween(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+		Position = UDim2.fromScale(1, 1)
+	}):Play()
+	
+	table.insert(self._notifications, notif)
+	task.defer(function()
+		notif:SetAttribute("Height", notif.AbsoluteSize.Y)
+
+		self:_reorderNotifications()
+	end)
+	
+	task.delay(duration, function()
+		self:_removeNotification(notif)
+	end)
+end
+
+function Window:_reorderNotifications()
+	local padding = 8
+	local yOff = -padding
+	
+	for i = #self._notifications, 1, -1 do
+		local notif = self._notifications[i]
+		
+		if notif:GetAttribute("Removing") then
+			continue
+		end
+		
+		local height = notif:GetAttribute("Height") or 80
+		local targetPos = UDim2.new(1, 0, 1, yOff)
+		
+		Util.tween(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+			Position = targetPos
+		}):Play()
+		
+		yOff -= (height + padding)
+	end
+end
+
+function Window:_removeNotification(notif: Frame)
+	if notif:GetAttribute("Removing") then return end
+	notif:SetAttribute("Removing", true)
+	
+	local tween = Util.tween(notif, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		Position = UDim2.new(2, 60, notif.Position.Y.Scale, notif.Position.Y.Offset)
+	})
+	tween:Play()
+	
+	tween.Completed:Connect(function()
+		for i, n in ipairs(self._notifications) do
+			if n == notif then
+				table.remove(self._notifications, i)
+				break
+			end
+		end
+		
+		notif:Destroy()
+		
+		task.defer(function()
+			self:_reorderNotifications()
+		end)
+	end)
 end
 
 -- \\ Columns
@@ -1102,7 +1319,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
 		}):Play()
 
-		_G.conns["TweenCompleted5"] = tween.Completed:Connect(function()
+		_G.conns["TweenCompleted4"] = tween.Completed:Connect(function()
 			if not self.DropdownOpen then
 				self.Dropdown.Visible = false
 			end
@@ -1442,7 +1659,7 @@ function PlayerList:_refresh()
 	for _, plr: Player in ipairs(Players:GetPlayers()) do
 		if plr then
 			local row: Frame = Instance.new("Frame") :: Frame
-			row.Name = plr.Name .. " PlayerListFrame"
+			row.Name = `{plr.Name}PlayerListFrame`
 			row.Size = UDim2.new(1, 0, 0, 26)
 			row.BackgroundColor3 = GetTheme().hover
 			row.BackgroundTransparency = 1
@@ -1699,7 +1916,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
 		}):Play()
 
-		_G.conns["TweenCompleted4"] = tween.Completed:Connect(function()
+		_G.conns["TweenCompleted5"] = tween.Completed:Connect(function()
 			if not self.DropdownOpen then
 				self.Dropdown.Visible = false
 			end
