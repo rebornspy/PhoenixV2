@@ -20,6 +20,8 @@ _G.cleanup = function()
 	table.clear(_G.conns)
 end
 
+_G.cleanup()
+
 -- // Themes
 local Themes = {
 	Dark = {
@@ -182,6 +184,8 @@ export type WindowType = {
 
 	_makeResizable: (self: WindowType, handle: Frame) -> ();
 	_updateColumnSize: (self: WindowType) -> ();
+	_getColumnsBelow: (self: WindowType, col: Frame) -> ();
+	_shiftColumns: (self: WindowType, column: Frame, delta: number) -> ();
 	RefreshTheme: (self: WindowType) -> ();
 	addColumn: (self: WindowType, order: number) -> ColumnType;
 	Minimize: (self: WindowType, minimized: boolean) -> ();
@@ -537,6 +541,37 @@ function Window:_updateColumnSize()
 	end
 end
 
+function Window:_getColumnsBelow(column: Frame)
+	local below = {}
+	
+	for _, col in ipairs(self.Body:GetChildren()) do
+		local pos = col.AbsolutePosition.Y
+		if pos > column.AbsolutePosition.Y and
+			math.abs(col.AbsolutePosition.X - column.AbsolutePosition.X) < 1 then
+			table.insert(below, col)
+		end
+	end
+	
+	return below
+end
+
+function Window:_shiftColumns(column: Frame, delta: number)
+	for _, col in ipairs(self:_getColumnsBelow(column)) do
+		Util.tween(col, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		), {
+			Position = UDim2.new(
+				col.Position.X.Scale,
+				col.Position.X.Offset,
+				col.Position.Y.Scale,
+				col.Position.Y.Offset + delta
+			)
+		}):Play()
+	end
+end
+
 function Window:RefreshTheme()
 	local t = GetTheme()
 
@@ -844,10 +879,6 @@ function Column:ReorderChildren(sortFunc)
 	for i, child: any in ipairs(children) do
 		child.LayoutOrder = i
 	end
-
-	task.defer(function()
-		self.Window:_updateColumnSize()
-	end)
 end
 
 function Window:AddColumn()
@@ -947,6 +978,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	local default: boolean = data.Default or false
 	local layoutOrder: number = data.LayoutOrder or 1
 	local cb: (boolean) -> () = data.Callback or function() end
+	cb(default)
 
 	local self = setmetatable({}, Toggle) :: ToggleType
 	self.Window = window
@@ -982,6 +1014,7 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextTruncate = Enum.TextTruncate.SplitWord
 	lbl.Parent = f
 
 	local sw = Instance.new("TextButton")
@@ -1063,41 +1096,79 @@ function Toggle.new(window: WindowType, parent: Instance, data: ToggleData): Tog
 		self.DropdownOpen = not self.DropdownOpen
 		self.Dropdown.Visible = true
 
-		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+		local expansion = layout.AbsoluteContentSize.Y + 8
+
+		local delta = self.DropdownOpen and expansion or -expansion
+
+		local below = self.Window:_getColumnsBelow(parent)
+
+		Util.tween(self.Arrow, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		), {
 			Rotation = self.DropdownOpen and -90 or 0
 		}):Play()
 
-		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
-		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
-
-		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, -8, 0, targetHeight)
+		Util.tween(self.Dropdown, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		), {
+			Size = UDim2.new(
+				1,
+				-8,
+				0,
+				self.DropdownOpen and expansion or 0
+			)
 		}):Play()
 
 		local baseHeight = self.DropdownOpen and 38 or 34
-		
-		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
+
+		local tween = Util.tween(self.Frame, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		), {
+			Size = UDim2.new(
+				1,
+				0,
+				0,
+				baseHeight + (self.DropdownOpen and expansion or 0)
+			)
 		})
+
 		tween:Play()
-		
-		local startColSize = parent.Size
-		local baseColHeight = startColSize.Y.Offset
-		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
+
+		Util.tween(parent, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		), {
+			Size = UDim2.new(
+				parent.Size.X.Scale,
+				parent.Size.X.Offset,
+				parent.Size.Y.Scale,
+				parent.Size.Y.Offset + delta
+			)
 		}):Play()
-		
-		_G.conns["TweenCompleted3"] = tween.Completed:Connect(function()
+
+		self.Window:_shiftColumns(parent, delta)
+
+		tween.Completed:Once(function()
 			if not self.DropdownOpen then
 				self.Dropdown.Visible = false
 			end
-			self.Window:_updateColumnSize()
 		end)
 	end)
 
 	function self._updateArrowVisibility()
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
+		if hasChildren then
+			lbl.Size = lbl.Size - UDim2.new(0, 24, 0, 0)
+		end
 	end
 
 	self._updateArrowVisibility()
@@ -1130,10 +1201,6 @@ function Toggle:AddOption(data)
 	end
 
 	self:_updateArrowVisibility()
-
-	task.defer(function()
-		self.Window:_updateColumnSize()
-	end)
 end
 
 function Column:AddToggle(data: ToggleData)
@@ -1183,6 +1250,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	local default: number = data.Default or min
 	local layoutOrder: number = data.LayoutOrder or 1
 	local cb: (number) -> () = data.Callback or function() end
+	cb(default)
 
 	local self = setmetatable({}, Slider) :: SliderType
 	self.Window = window
@@ -1224,6 +1292,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextTruncate = Enum.TextTruncate.SplitWord
 	lbl.Parent = f
 
 	local val = Instance.new("TextBox")
@@ -1239,7 +1308,7 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 	val.TextSize = 13
 	val.TextXAlignment = Enum.TextXAlignment.Right
 	val.Parent = f
-	val.ClearTextOnFocus = false
+	val.ClearTextOnFocus = true
 
 	local bar = Instance.new("Frame")
 	bar.Name = "Bar"
@@ -1295,46 +1364,93 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		self.DropdownOpen = not self.DropdownOpen
 		self.Dropdown.Visible = true
 
-		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Rotation = self.DropdownOpen and -90 or 0
-		}):Play()
-
 		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
-		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
+		local expansion = layout.AbsoluteContentSize.Y + 8
 
-		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, -8, 0, targetHeight)
-		}):Play()
+		local delta = self.DropdownOpen and expansion or -expansion
+
+		local below = self.Window:_getColumnsBelow(parent)
+
+		Util.tween(self.Arrow, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Rotation = self.DropdownOpen and -90 or 0
+			}):Play()
+
+		Util.tween(self.Dropdown, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					1,
+					-8,
+					0,
+					self.DropdownOpen and expansion or 0
+				)
+			}):Play()
 
 		local baseHeight = self.DropdownOpen and 44 or 46
 
-		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
-		})
+		local tween = Util.tween(self.Frame, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					1,
+					0,
+					0,
+					baseHeight + (self.DropdownOpen and expansion or 0)
+				)
+			})
+
 		tween:Play()
 
-		local startColSize = parent.Size
-		local baseColHeight = startColSize.Y.Offset
-		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
-		}):Play()
+		Util.tween(parent, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					parent.Size.X.Scale,
+					parent.Size.X.Offset,
+					parent.Size.Y.Scale,
+					parent.Size.Y.Offset + delta
+				)
+			}):Play()
 
-		_G.conns["TweenCompleted4"] = tween.Completed:Connect(function()
+		self.Window:_shiftColumns(parent, delta)
+
+		tween.Completed:Once(function()
 			if not self.DropdownOpen then
 				self.Dropdown.Visible = false
 			end
-			self.Window:_updateColumnSize()
 		end)
 	end)
 
 	function self._updateArrowVisibility()
 		local hasChildren = #drop:GetChildren() > 3
 		self.Arrow.Visible = hasChildren
+		self:_updateArrowPosition()
 	end
 
 	function self:_updateArrowPosition()
 		local valWidth = val.AbsoluteSize.X
-		arrow.Position = UDim2.new(1, -(valWidth + 18), 0, 8)
+
+		if arrow.Visible then
+			arrow.Position = UDim2.new(1, -(valWidth + 14), 0, 8)
+		end
+
+		local rightPadding = valWidth + 10
+
+		if arrow.Visible then
+			rightPadding += arrow.AbsoluteSize.X + 8
+		end
+
+		lbl.Size = UDim2.new(1, -(rightPadding + 10), 0, 18)
 	end
 
 	local fill = Instance.new("Frame")
@@ -1370,6 +1486,11 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 		local v = math.floor(raw / snap + 0.5) * snap
 
 		v = math.clamp(v, min, max)
+		
+		if v == self._lastVal then
+			return
+		end
+		
 		local sr = (v - min) / (max - min)
 
 		Util.tween(fill, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
@@ -1416,8 +1537,6 @@ function Slider.new(window: WindowType, parent: Instance, data: SliderData): Sli
 
 	_G.conns["Focused1"] = val.Focused:Connect(function()
 		val:CaptureFocus()
-		val.CursorPosition = #val.Text + 1
-		val.SelectionStart = 1
 	end)
 	
 	_G.conns["GetPropertyChangedSignal2"] = val:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1449,6 +1568,10 @@ function Slider:SetValue(v: number)
 
 	v = math.clamp(v, min, max)
 	v = math.floor(v / snap + 0.5) * snap
+	
+	if v == self._lastVal then
+		return
+	end
 
 	local sr = (v - min) / (max - min)
 
@@ -1491,10 +1614,6 @@ function Slider:AddOption(data)
 	end
 
 	self:_updateArrowVisibility()
-
-	task.defer(function()
-		self.Window:_updateColumnSize()
-	end)
 
 	return newComponent
 end
@@ -1549,6 +1668,7 @@ function Pill.new(window: WindowType, parent: Instance, data: PillData): PillTyp
 	l.TextColor3 = GetTheme().text
 	l.TextSize = 12
 	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextTruncate = Enum.TextTruncate.SplitWord
 	l.Parent = b
 
 	_G.conns["MouseEnter3"] = b.MouseEnter:Connect(function()
@@ -1689,6 +1809,7 @@ function PlayerList:_refresh()
 			name.TextColor3 = GetTheme().text
 			name.TextSize = 12
 			name.TextXAlignment = Enum.TextXAlignment.Left
+			name.TextTruncate = Enum.TextTruncate.SplitWord
 			name.Parent = row
 
 			for _, cfg in ipairs(self.MiniButtonConfigs) do
@@ -1824,6 +1945,7 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextTruncate = Enum.TextTruncate.SplitWord
 	lbl.Parent = f
 
 	local keyBtn = Instance.new("TextButton")
@@ -1892,35 +2014,70 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 		self.DropdownOpen = not self.DropdownOpen
 		self.Dropdown.Visible = true
 
-		Util.tween(self.Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Rotation = self.DropdownOpen and -90 or 0
-		}):Play()
-
 		local layout = self.Dropdown:FindFirstChildOfClass("UIListLayout") :: UIListLayout
-		local targetHeight = self.DropdownOpen and (layout.AbsoluteContentSize.Y + 8) or 0
+		local expansion = layout.AbsoluteContentSize.Y + 8
 
-		Util.tween(self.Dropdown, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, -8, 0, targetHeight)
-		}):Play()
+		local delta = self.DropdownOpen and expansion or -expansion
+
+		local below = self.Window:_getColumnsBelow(parent)
+
+		Util.tween(self.Arrow, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Rotation = self.DropdownOpen and -90 or 0
+			}):Play()
+
+		Util.tween(self.Dropdown, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					1,
+					-8,
+					0,
+					self.DropdownOpen and expansion or 0
+				)
+			}):Play()
 
 		local baseHeight = self.DropdownOpen and 38 or 34
 
-		local tween = Util.tween(self.Frame, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, 0, 0, baseHeight + targetHeight)
-		})
+		local tween = Util.tween(self.Frame, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					1,
+					0,
+					0,
+					baseHeight + (self.DropdownOpen and expansion or 0)
+				)
+			})
+
 		tween:Play()
 
-		local startColSize = parent.Size
-		local baseColHeight = startColSize.Y.Offset
-		Util.tween(parent, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size = UDim2.new(0, startColSize.X.Offset, 0, (self.DropdownOpen and baseColHeight + (layout.AbsoluteContentSize.Y + 8) or baseColHeight - (layout.AbsoluteContentSize.Y + 8)))
-		}):Play()
+		Util.tween(parent, TweenInfo.new(
+			0.15,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+			), {
+				Size = UDim2.new(
+					parent.Size.X.Scale,
+					parent.Size.X.Offset,
+					parent.Size.Y.Scale,
+					parent.Size.Y.Offset + delta
+				)
+			}):Play()
 
-		_G.conns["TweenCompleted5"] = tween.Completed:Connect(function()
+		self.Window:_shiftColumns(parent, delta)
+
+		tween.Completed:Once(function()
 			if not self.DropdownOpen then
 				self.Dropdown.Visible = false
 			end
-			self.Window:_updateColumnSize()
 		end)
 	end)
 
@@ -1954,8 +2111,11 @@ function Keybind.new(window: WindowType, parent: Instance, data: KeybindData): K
 	self.Connection = _G.conns["InputBegan6"]
 
 	function self:_updateArrowVisibility()
-		local count = #drop:GetChildren()
-		self.Arrow.Visible = count > 3
+		local hasChildren = #drop:GetChildren() > 3
+		self.Arrow.Visible = hasChildren
+		if hasChildren then
+			lbl.Size = lbl.Size - UDim2.new(0, 24, 0, 0)
+		end
 	end
 
 	self:_updateArrowVisibility()
@@ -1996,10 +2156,6 @@ function Keybind:AddOption(data)
 	end
 
 	self:_updateArrowVisibility()
-
-	task.defer(function()
-		self.Window:_updateColumnSize()
-	end)
 
 	return newComponent
 end
@@ -2044,6 +2200,7 @@ function Option.new(parentComponent, name, cb: (boolean? | number?) -> ())
 	lbl.TextColor3 = GetTheme().text
 	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextTruncate = Enum.TextTruncate.SplitWord
 	lbl.Parent = f
 
 	_G.conns["InputBegan7"] = f.InputBegan:Connect(function(i)
